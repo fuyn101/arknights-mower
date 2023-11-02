@@ -22,8 +22,8 @@ class DepotSolver(BaseSolver):
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
         sift = cv2.SIFT_create()
-        surf = cv2.xfeatures2d.SURF_create(600)
-        self.detector = surf
+        #surf = cv2.xfeatures2d.SURF_create(600)
+        self.detector = sift
         self.template_images_folder = "./ui/public/new"
         self.template_images = self.load_template_images(
             self.template_images_folder, self.detector
