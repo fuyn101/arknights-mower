@@ -22,7 +22,7 @@ class DepotSolver(BaseSolver):
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
         sift = cv2.SIFT_create()
-        #surf = cv2.xfeatures2d.SURF_create(600)
+        # surf = cv2.xfeatures2d.SURF_create(600)
         self.detector = sift
         self.template_images_folder = "./ui/public/new"
         self.template_images = self.load_template_images(
@@ -62,13 +62,13 @@ class DepotSolver(BaseSolver):
 
         oldscreenshot = self.recog.gray
 
-        self.swipe_only([0, 450], [1900,450], 100, 1)
+        self.swipe_only([0, 450], [1900, 450], 100, 1)
         logger.info("仓库扫描: 拖动至下一页")
         self.recog.update()
         newscreenshot = self.recog.gray
         similarity = self.compare_images(newscreenshot, oldscreenshot)
         logger.info(f"上页和这页的相似度{similarity}")
-        file_path = f"D:/Game/Arknights/arknights-mower/screenshot/depot/new.png"
+        file_path = get_path("@app/screenshot/depot/new.png")
         cv2.imwrite(file_path, self.recog.gray)
         main_start_time = time.time()
 
@@ -198,6 +198,7 @@ class DepotSolver(BaseSolver):
         Returns:
             list: 包含截取的圆形区域和数字区域的图像列表。
         """
+        path = get_path("@app/screenshot/depot")
         image_set = []
         for circle in HoughCircle_24_int:
             center_x, center_y = circle[0], circle[1]
@@ -219,13 +220,14 @@ class DepotSolver(BaseSolver):
                 cut_image, (80 * 3, 40 * 3), interpolation=cv2.INTER_LINEAR
             )
             cut_image = cv2.threshold(cut_image, 220, 255, cv2.THRESH_BINARY)[1]
+
             cv2.imwrite(
-                f"D:/Game/Arknights/arknights-mower/screenshot/depot/{center_x},{center_y}-cropped_square.png",
+                f"{path}/{center_x},{center_y}-cropped_square.png",
                 cropped_square,
             )
 
             cv2.imwrite(
-                f"D:/Game/Arknights/arknights-mower/screenshot/depot/{center_x},{center_y}-num_cut.png",
+                f"{path}/{center_x},{center_y}-num_cut.png",
                 cut_image,
             )
             image_set.append([cropped_square, cut_image, center_x, center_y])
