@@ -24,7 +24,7 @@ class DepotSolver(BaseSolver):
         sift = cv2.SIFT_create()
         # surf = cv2.xfeatures2d.SURF_create(600)
         self.detector = sift
-        self.template_images_folder = "./ui/public/new"
+        self.template_images_folder = str(get_path("@internal/dist/new"))  # 不知道怎么写
         self.template_images = self.load_template_images(
             self.template_images_folder, self.detector
         )
@@ -68,7 +68,11 @@ class DepotSolver(BaseSolver):
         newscreenshot = self.recog.gray
         similarity = self.compare_images(newscreenshot, oldscreenshot)
         logger.info(f"上页和这页的相似度{similarity}")
+
         file_path = get_path("@app/screenshot/depot/new.png")
+
+        file_path = str(file_path)
+
         cv2.imwrite(file_path, self.recog.gray)
         main_start_time = time.time()
 
