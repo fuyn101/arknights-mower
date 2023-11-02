@@ -15,6 +15,7 @@ from email.mime.multipart import MIMEMultipart
 
 from .skland import SKLand
 from ..command import recruit
+from ..command import depot
 from ..data import agent_list, base_room_list, ocr_error
 from ..utils import character_recognize, detector, segment
 from ..utils.digit_reader import DigitReader
@@ -2303,7 +2304,7 @@ class BaseSchedulerSolver(BaseSolver):
                 """测试公招用"""
                 if self.recruit_config['recruit_enable']:
                     recruit([], self.send_message_config, self.recruit_config)
-
+                depot()
                 self.send_message('启动MAA')
                 self.back_to_index()
                 # 任务及参数请参考 docs/集成文档.md

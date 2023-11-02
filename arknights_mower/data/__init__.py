@@ -11,6 +11,10 @@ agent_list = json.loads(
 # agent_base_config = json.loads(
 #     Path(f'{__rootdir__}/data/agent-base.json').read_text('utf-8'))
 
+template_dict=json.loads(
+    Path(f'{__rootdir__}/data/template_dict.json').read_text('utf-8')
+)
+
 # name of each room in the basement
 base_room_list = json.loads(
     Path(f'{__rootdir__}/data/base.json').read_text('utf-8'))

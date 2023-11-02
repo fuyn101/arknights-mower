@@ -15,7 +15,12 @@ def mail(args: list[str] = [], device: Device = None):
     """
     MailSolver(device).run()
 
-
+def depot(args: list[str] = [], device: Device = None):
+    """
+    仓库扫描
+        慢
+    """
+    DepotSolver(device).run()
 def base(args: list[str] = [], device: Device = None):
     """
     base [plan] [-c] [-d[F][N]] [-f[F][N]]

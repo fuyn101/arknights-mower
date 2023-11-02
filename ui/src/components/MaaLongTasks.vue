@@ -26,33 +26,34 @@ const mobile = inject('mobile')
         </div>
       </n-checkbox>
     </template>
-    <n-form :label-placement="mobile ? 'top' : 'left'" :show-feedback="false">
-      <n-grid cols="2">
-        <n-form-item-gi label="开始时间：">
-          <n-time-picker format="H:mm" v-model:formatted-value="maa_rg_sleep_max" />
-        </n-form-item-gi>
-        <n-form-item-gi label="停止时间：">
-          <n-time-picker format="H:mm" v-model:formatted-value="maa_rg_sleep_min" />
-        </n-form-item-gi>
-      </n-grid>
-    </n-form>
-    <n-tabs
-      type="line"
-      :value="maa_long_task_type"
-      :on-update:value="
-        (v) => {
-          maa_long_task_type = v
-        }
-      "
-    >
-      <n-tab-pane name="rogue" tab="集成战略">
-        <maa-rogue />
-      </n-tab-pane>
-      <n-tab-pane name="sss" tab="保全派驻">
-        <maa-sss />
-      </n-tab-pane>
-      <n-tab-pane name="ra" tab="生息演算" disabled></n-tab-pane>
-    </n-tabs>
+    <template v-if="maa_rg_enable">
+      <n-form :label-placement="mobile ? 'top' : 'left'" :show-feedback="false">
+        <n-grid cols="2">
+          <n-form-item-gi label="开始时间：">
+            <n-time-picker format="H:mm" v-model:formatted-value="maa_rg_sleep_max" />
+          </n-form-item-gi>
+          <n-form-item-gi label="停止时间：">
+            <n-time-picker format="H:mm" v-model:formatted-value="maa_rg_sleep_min" />
+          </n-form-item-gi>
+        </n-grid>
+      </n-form>
+      <n-tabs
+        type="line"
+        :value="maa_long_task_type"
+        :on-update:value="
+          (v) => {
+            maa_long_task_type = v
+          }
+        "
+      >
+        <n-tab-pane name="rogue" tab="集成战略">
+          <maa-rogue />
+        </n-tab-pane>
+        <n-tab-pane name="sss" tab="保全派驻">
+          <maa-sss />
+        </n-tab-pane>
+        <n-tab-pane name="ra" tab="生息演算" disabled></n-tab-pane> </n-tabs
+    ></template>
   </n-card>
 </template>
 
