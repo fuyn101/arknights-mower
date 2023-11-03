@@ -2455,7 +2455,7 @@ class BaseSchedulerSolver(BaseSolver):
         except Exception as e:
             logger.exception(e)
             self.MAA = None
-            #self.device.exit(self.package_name)
+            self.device.exit(self.package_name)
             self.send_message(str(e), "Maa调用出错！")
             remaining_time = (self.tasks[0].time - datetime.now()).total_seconds()
             if remaining_time > 0:
