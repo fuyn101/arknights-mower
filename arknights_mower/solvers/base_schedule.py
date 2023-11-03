@@ -2303,8 +2303,8 @@ class BaseSchedulerSolver(BaseSolver):
 
                 """测试公招用"""
                 if self.recruit_config['recruit_enable']:
+                    #depot()                    
                     recruit([], self.send_message_config, self.recruit_config)
-                depot()
                 self.send_message('启动MAA')
                 self.back_to_index()
                 # 任务及参数请参考 docs/集成文档.md
@@ -2455,7 +2455,7 @@ class BaseSchedulerSolver(BaseSolver):
         except Exception as e:
             logger.exception(e)
             self.MAA = None
-            self.device.exit(self.package_name)
+            #self.device.exit(self.package_name)
             self.send_message(str(e), "Maa调用出错！")
             remaining_time = (self.tasks[0].time - datetime.now()).total_seconds()
             if remaining_time > 0:

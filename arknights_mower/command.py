@@ -41,24 +41,24 @@ def base(args: list[str] = [], device: Device = None):
 
     try:
         for p in args:
-            if p[0] == '-':
-                if p[1] == 'c':
+            if p[0] == "-":
+                if p[1] == "c":
                     clue_collect = True
-                elif p[1] == 'd':
-                    assert '1' <= p[2] <= '3'
-                    assert '1' <= p[3] <= '3'
-                    drone_room = f'room_{p[2]}_{p[3]}'
-                elif p[1] == 'f':
-                    assert '1' <= p[2] <= '3'
-                    assert '1' <= p[3] <= '3'
-                    fia_room = f'room_{p[2]}_{p[3]}'
+                elif p[1] == "d":
+                    assert "1" <= p[2] <= "3"
+                    assert "1" <= p[3] <= "3"
+                    drone_room = f"room_{p[2]}_{p[3]}"
+                elif p[1] == "f":
+                    assert "1" <= p[2] <= "3"
+                    assert "1" <= p[3] <= "3"
+                    fia_room = f"room_{p[2]}_{p[3]}"
             elif arrange is None:
                 arrange = config.BASE_CONSTRUCT_PLAN.get(p)
                 if arrange is None:
                     if p in base_room_list:
                         any_room.append(p)
                         agents.append([])
-                    elif p in agent_list or 'free' == p.lower():
+                    elif p in agent_list or "free" == p.lower():
                         agents[-1].append(p)
     except Exception:
         raise ParamError
@@ -89,7 +89,12 @@ def shop(args: list[str] = [], device: Device = None):
         ShopSolver(device).run(args)
 
 
-def recruit(args: list[str] = [], send_message_config={}, recruit_config={}, device: Device = None):
+def recruit(
+    args: list[str] = [],
+    send_message_config={},
+    recruit_config={},
+    device: Device = None,
+):
     """
     recruit [agents ...]
         自动进行公共招募
@@ -98,11 +103,16 @@ def recruit(args: list[str] = [], send_message_config={}, recruit_config={}, dev
     choose = {}
     result = {}
     if len(args) == 0:
-        choose, result = RecruitSolver(device).run(config.RECRUIT_PRIORITY, send_message_config, recruit_config)
+        choose, result = RecruitSolver(device).run(
+            config.RECRUIT_PRIORITY, send_message_config, recruit_config
+        )
     else:
-        choose, result = RecruitSolver(device).run(args, send_message_config,recruit_config)
+        choose, result = RecruitSolver(device).run(
+            args, send_message_config, recruit_config
+        )
 
     return choose, result
+
 
 def mission(args: list[str] = [], device: Device = None):
     """
@@ -126,8 +136,14 @@ def operation(args: list[str] = [], device: Device = None):
     """
 
     if len(args) == 1 and args[0] == "--plan":
-        remain_plan = OpeSolver(device).run(None, config.OPE_TIMES, config.OPE_POTION,
-                                            config.OPE_ORIGINITE, config.OPE_ELIMINATE, config.OPE_PLAN)
+        remain_plan = OpeSolver(device).run(
+            None,
+            config.OPE_TIMES,
+            config.OPE_POTION,
+            config.OPE_ORIGINITE,
+            config.OPE_ELIMINATE,
+            config.OPE_PLAN,
+        )
         config.update_ope_plan(remain_plan)
         return
 
@@ -141,7 +157,7 @@ def version(args: list[str] = [], device: Device = None):
     version
         输出版本信息
     """
-    print(f'arknights-mower: version: {__version__}')
+    print(f"arknights-mower: version: {__version__}")
 
 
 def help(args: list[str] = [], device: Device = None):
@@ -149,17 +165,15 @@ def help(args: list[str] = [], device: Device = None):
     help
         输出本段消息
     """
-    print(
-        'usage: arknights-mower command [command args] [--config filepath] [--debug]')
-    print(
-        'commands (prefix abbreviation accepted):')
+    print("usage: arknights-mower command [command args] [--config filepath] [--debug]")
+    print("commands (prefix abbreviation accepted):")
     for cmd in global_cmds:
         if cmd.__doc__:
-            print('    ' + str(cmd.__doc__.strip()))
+            print("    " + str(cmd.__doc__.strip()))
         else:
-            print('    ' + cmd.__name__)
-    print(f'    --debug\n        启用调试功能，调试信息将会输出到 {config.LOGFILE_PATH} 中')
-    print(f'    --config filepath\n        指定配置文件，默认使用 {config.PATH}')
+            print("    " + cmd.__name__)
+    print(f"    --debug\n        启用调试功能，调试信息将会输出到 {config.LOGFILE_PATH} 中")
+    print(f"    --config filepath\n        指定配置文件，默认使用 {config.PATH}")
 
 
 """
@@ -169,7 +183,7 @@ operation will be replaced by operation_one in ScheduleSolver
 schedule_cmds = [base, credit, mail, mission, shop, recruit, operation]
 
 
-def add_tasks(solver: ScheduleSolver = None, tag: str = ''):
+def add_tasks(solver: ScheduleSolver = None, tag: str = ""):
     """
     为 schedule 模块添加任务
     """
@@ -177,9 +191,8 @@ def add_tasks(solver: ScheduleSolver = None, tag: str = ''):
     if plan is not None:
         for args in plan:
             args = args.split()
-            if 'schedule' in args:
-                logger.error(
-                    'Found `schedule` in `schedule`. Are you kidding me?')
+            if "schedule" in args:
+                logger.error("Found `schedule` in `schedule`. Are you kidding me?")
                 raise NotImplementedError
             try:
                 target_cmd = match_cmd(args[0], schedule_cmds)
@@ -200,8 +213,8 @@ def schedule(args: list[str] = [], device: Device = None):
 
     try:
         for p in args:
-            if p[0] == '-':
-                if p[1] == 'n':
+            if p[0] == "-":
+                if p[1] == "n":
                     new_schedule = True
     except Exception:
         raise ParamError
@@ -212,25 +225,35 @@ def schedule(args: list[str] = [], device: Device = None):
             for tag in config.SCHEDULE_PLAN.keys():
                 add_tasks(solver, tag)
         else:
-            logger.warning('empty plan')
+            logger.warning("empty plan")
         solver.per_run()
     solver.run()
 
 
 # all available commands
-global_cmds = [base, credit, mail, mission, shop,
-               recruit, operation, version, help, schedule]
+global_cmds = [
+    base,
+    credit,
+    mail,
+    mission,
+    shop,
+    recruit,
+    operation,
+    version,
+    help,
+    schedule,
+]
 
 
 def match_cmd(prefix: str, avail_cmds: list[str] = global_cmds):
-    """ match command """
+    """match command"""
     target_cmds = [x for x in avail_cmds if x.__name__.startswith(prefix)]
     if len(target_cmds) == 1:
         return target_cmds[0]
     elif len(target_cmds) == 0:
-        print('unrecognized command: ' + prefix)
+        print("unrecognized command: " + prefix)
         return None
     else:
-        print('ambiguous command: ' + prefix)
-        print('matched commands: ' + ','.join(x.__name__ for x in target_cmds))
+        print("ambiguous command: " + prefix)
+        print("matched commands: " + ",".join(x.__name__ for x in target_cmds))
         return None
