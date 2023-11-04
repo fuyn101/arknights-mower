@@ -55,6 +55,7 @@ jobs:
         shell: cmd
         run: |
           python -m venv venv
+          venv\Scripts\pip install opencv_contrib_python.whl
           venv\Scripts\pip install -r requirements.txt
           venv\Scripts\pip install pyinstaller Flask flask-sock flask-cors pywebview
       - name: Patch Paddle

@@ -24,8 +24,8 @@ class DepotSolver(BaseSolver):
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
         sift = cv2.SIFT_create()
-        #surf = cv2.xfeatures2d.SURF_create(600)
-        self.detector = sift  # 检测器类型
+        surf = cv2.xfeatures2d.SURF_create(600)
+        self.detector = surf  # 检测器类型
         self.template_images_folder = str(get_path("@internal/dist/new"))  # 模板文件夹
         self.template_images = self.load_template_images(self.detector)  # 模板列表
         self.screenshot_dict = {}  # 所有截图的字典（尽量不重不漏）
@@ -272,7 +272,6 @@ class DepotSolver(BaseSolver):
                 self.translate_results[results_dict[key][0]] = [
                     result[2],
                     results_dict[key][1],
-                    result[3],
                 ]
 
 
@@ -314,8 +313,8 @@ def match_once(data_template):
 
     data, template_images = data_template
     sift = cv2.SIFT_create()
-    #surf = cv2.xfeatures2d.SURF_create(600)
-    detector = sift  # 检测器类型
+    surf = cv2.xfeatures2d.SURF_create(600)
+    detector = surf  # 检测器类型
     matcher = cv2.FlannBasedMatcher(
         dict(algorithm=0, trees=2), dict(checks=30)
     )  # 初始化一个识别
