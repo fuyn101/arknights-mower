@@ -23,7 +23,7 @@ class DepotSolver(BaseSolver):
 
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
-        sift = cv2.SIFT_create()
+        # sift = cv2.SIFT_create()
         surf = cv2.xfeatures2d.SURF_create(600)
         self.detector = surf  # 检测器类型
         self.template_images_folder = str(get_path("@internal/dist/new"))  # 模板文件夹
@@ -84,7 +84,7 @@ class DepotSolver(BaseSolver):
             self.screenshot_dict[self.screenshot_count] = oldscreenshot  # 1 第一张图片
             logger.info(f"仓库扫描: 把第{self.screenshot_count}页保存进内存中等待识别")
             while True:
-                self.swipe_only((1800, 450), (-300, 0), 200, 2)  # 滑动
+                self.swipe_only((1800, 450), (-400, 0), 200, 2)  # 滑动
                 self.recog.update()
                 newscreenshot = self.recog.gray
                 similarity = self.compare_screenshot(
@@ -109,15 +109,12 @@ class DepotSolver(BaseSolver):
             self.match_results = parallel_match(self.image_set, self.template_images)
             self.translate(self.match_results)
             logger.info(f"仓库扫描: 识别结果{self.translate_results}")
-            keys = ["日期"]
-            keys.append(list(self.translate_results.keys()))
-            values = [datetime.date.today()]
-            values.append(list(self.translate_results.values()))
             csv_out = str(get_path("@app/tmp/depot.csv"))
+            valuea = [datetime.date.today()]
+            valuea += self.translate_results.values()
             with open(csv_out, "a", newline="", encoding="utf-8") as csvfile:
                 writer = csv.writer(csvfile)
-                writer.writerow(keys)  # 写入列名
-                writer.writerow(values)  # 写入数据
+                writer.writerow(valuea)
 
         return True
 
@@ -148,6 +145,7 @@ class DepotSolver(BaseSolver):
             minRadius=def_Radius - dt,
             maxRadius=def_Radius + dt,
         )
+        get_path("@app/screenshot/depot").mkdir(exist_ok=True)
         path = get_path("@app/screenshot/depot")
 
         if detected_circles is not None:
@@ -270,6 +268,8 @@ class DepotSolver(BaseSolver):
             else:
                 key = result[0]
                 self.translate_results[results_dict[key][0]] = [
+                    results_dict[key][0],
+                    results_dict[key][2],
                     result[2],
                     results_dict[key][1],
                 ]
@@ -277,7 +277,7 @@ class DepotSolver(BaseSolver):
 
 def parallel_match(image_set, template_images):
     results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=3) as executor:
         results = list(
             executor.map(match_once, [(data, template_images) for data in image_set])
         )
@@ -312,7 +312,7 @@ def match_once(data_template):
     """
 
     data, template_images = data_template
-    sift = cv2.SIFT_create()
+    # sift = cv2.SIFT_create()
     surf = cv2.xfeatures2d.SURF_create(600)
     detector = surf  # 检测器类型
     matcher = cv2.FlannBasedMatcher(
@@ -328,7 +328,7 @@ def match_once(data_template):
         if match_score > best_match_score:
             result_num = engine(num_cut)
             best_match_score, best_match_image = match_score, template_images_name
-    logger.info(f"识别: {(center_x,center_y)}")
+    logger.debug(f"识别: {(center_x,center_y)}")
     try:
         match_result = [
             best_match_image[:-4],
