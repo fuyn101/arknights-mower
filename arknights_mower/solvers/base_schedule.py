@@ -14,7 +14,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from .skland import SKLand
-from ..command import recruit
+from ..command import recruit, daily_report, mail
 from ..command import depot
 from ..data import agent_list, base_room_list, ocr_error
 from ..utils import character_recognize, detector, segment
@@ -93,9 +93,10 @@ class BaseSchedulerSolver(BaseSolver):
         self.refresh_connecting = False
         self.recruit_config = {}
         self.skland_config = {}
-        self.sk_time = None
+      
         self.recruit_time = None
 
+        self.daily_mission = False
     def run(self) -> None:
         """
         :param clue_collect: bool, 是否收取线索
@@ -259,7 +260,7 @@ class BaseSchedulerSolver(BaseSolver):
 
     def handle_error(self, force=False):
         if self.scene() == Scene.UNKNOWN:
-            self.device.exit(self.package_name)
+            self.device.exit()
         if self.error or force:
             # 如果没有任何时间小于当前时间的任务才生成空任务
             if find_next_task(self.tasks, datetime.now()) is None:
@@ -1583,7 +1584,7 @@ class BaseSchedulerSolver(BaseSolver):
             self.tap((self.recog.w * arrange_order_res[ArrangeOrder(index)][0],
                       self.recog.h * arrange_order_res[ArrangeOrder(index)][1]), interval=0.2, rebuild=True)
 
-    def scan_agant(self, agent: list[str], error_count=0, max_agent_count=-1):
+    def scan_agent(self, agent: list[str], error_count=0, max_agent_count=-1):
         try:
             # 识别干员
             self.recog.update()
@@ -1607,7 +1608,7 @@ class BaseSchedulerSolver(BaseSolver):
             if error_count < 3:
                 logger.exception(e)
                 self.sleep(3)
-                return self.scan_agant(agent, error_count, max_agent_count)
+                return self.scan_agent(agent, error_count, max_agent_count)
             else:
                 raise e
 
@@ -1697,7 +1698,7 @@ class BaseSchedulerSolver(BaseSolver):
                     pre_order = [3, 'true']
                 if not fast_mode:
                     self.tap((self.recog.w * 0.38, self.recog.h * 0.95), interval=0.5)
-                changed, ret = self.scan_agant(agent)
+                changed, ret = self.scan_agent(agent)
                 if changed:
                     selected.extend(changed)
                     if len(agent) == 0: break
@@ -1720,7 +1721,7 @@ class BaseSchedulerSolver(BaseSolver):
                     pre_order = arrange_type
             first_time = False
 
-            changed, ret = self.scan_agant(agent)
+            changed, ret = self.scan_agent(agent)
             if changed:
                 selected.extend(changed)
                 # 如果找到了
@@ -1755,7 +1756,7 @@ class BaseSchedulerSolver(BaseSolver):
             free_list.extend([_name for _name in agent_list if _name not in self.op_data.operators.keys()])
             free_list = list(set(free_list) - set(self.op_data.config.free_blacklist))
             while free_num:
-                selected_name, ret = self.scan_agant(free_list, max_agent_count=free_num)
+                selected_name, ret = self.scan_agent(free_list, max_agent_count=free_num)
                 selected.extend(selected_name)
                 free_num -= len(selected_name)
                 while len(selected_name) > 0:
@@ -2293,26 +2294,12 @@ class BaseSchedulerSolver(BaseSolver):
                     seconds=self.maa_config['maa_execution_gap'] * 3600) < self.maa_config['last_execution']:
                 logger.info("间隔未超过设定时间，不启动maa")
             else:
-                """森空岛签到"""
-                depot() 
-                try:
-                    if self.skland_config['skland_enable']:
-                        skland = SKLand(self.skland_config['skland_info'])
-                        skland.attendance()
-                        
-                except RuntimeError as e:
-                    logger.info("森空岛签到失败:{}".format(e.__str__()))
-
-                """测试公招用"""
-                if self.recruit_config['recruit_enable']:
-                                       
-                    recruit([], self.send_message_config, self.recruit_config)
                 self.send_message('启动MAA')
                 self.back_to_index()
                 # 任务及参数请参考 docs/集成文档.md
                 self.initialize_maa()
                 if tasks == 'All':
-                    tasks = ['StartUp','Fight', 'Visit', 'Mall', 'Award','Depot']
+                    tasks = ['StartUp', 'Fight', 'Visit', 'Mall', 'Award', 'Depot']
                     # tasks = ['StartUp', 'Fight', 'Recruit', 'Visit', 'Mall', 'Award']
                 for maa_task in tasks:
                     if maa_task == 'Recruit':
@@ -2350,7 +2337,7 @@ class BaseSchedulerSolver(BaseSolver):
                     logger.info(hard_stop_msg)
                     self.send_message(hard_stop_msg)
                     time.sleep(180)
-                    self.device.exit(self.package_name)
+                    self.device.exit()
                 elif not one_time:
                     logger.info(f"记录MAA 本次执行时间")
                     self.maa_config['last_execution'] = datetime.now()
@@ -2427,7 +2414,7 @@ class BaseSchedulerSolver(BaseSolver):
                             break
                         else:
                             time.sleep(0)
-                    self.device.exit(self.package_name)
+                    self.device.exit()
             # 生息演算逻辑 结束
             if one_time:
                 if len(self.tasks) > 0:
@@ -2449,7 +2436,7 @@ class BaseSchedulerSolver(BaseSolver):
                     if self.close_simulator_when_idle:
                         restart_simulator(self.simulator, start=False)
                     elif self.exit_game_when_idle:
-                        self.device.exit(self.package_name)
+                        self.device.exit()
                 time.sleep(remaining_time)
                 if self.close_simulator_when_idle:
                     restart_simulator(self.simulator, stop=False)
@@ -2457,7 +2444,7 @@ class BaseSchedulerSolver(BaseSolver):
         except Exception as e:
             logger.exception(e)
             self.MAA = None
-            self.device.exit(self.package_name)
+            self.device.exit()
             self.send_message(str(e), "Maa调用出错！")
             remaining_time = (self.tasks[0].time - datetime.now()).total_seconds()
             if remaining_time > 0:
@@ -2467,4 +2454,12 @@ class BaseSchedulerSolver(BaseSolver):
     def skland_plan_solover(self):
         skland = SKLand(self.skland_config['skland_info'])
         skland.attendance()
-        del self.tasks[0]
+
+    def recruit_plan_solver(self):
+        recruit([], self.send_message_config, self.recruit_config)
+
+    def read_report(self):
+        return daily_report()
+
+    def mail_plan_solver(self):
+        mail([])

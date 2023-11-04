@@ -24,6 +24,8 @@ class Recognizer(object):
     def __init__(self, device: Device, screencap: bytes = None) -> None:
         self.device = device
         self.start(screencap)
+        self.loading_time = 0
+        self.LOADING_TIME_LIMIT = 5
 
     def start(self, screencap: bytes = None, build: bool = True) -> None:
         """ init with screencap, build matcher  """
@@ -62,7 +64,7 @@ class Recognizer(object):
         """ get the current scene in the game """
         if self.scene != Scene.UNDEFINED:
             return self.scene
-        if self.find('connecting', scope=((self.w//2, self.h//10*8), (self.w//4*3, self.h))) is not None:
+        if self.find('connecting', scope=((self.w//2, self.h//10*8), (self.w//4*3, self.h)), score=0.1) is not None:
             self.scene = Scene.CONNECTING
         elif self.find('index_nav', thres=250, scope=((0, 0), (100+self.w//4, self.h//10))) is not None:
             self.scene = Scene.INDEX
@@ -123,6 +125,10 @@ class Recognizer(object):
             self.scene = Scene.FRIEND_LIST_ON
         elif self.find('credit_visiting') is not None:
             self.scene = Scene.FRIEND_VISITING
+        elif self.find('riic_report_title') is not None:
+            self.scene = Scene.RIIC_REPORT
+        elif self.find('control_central_assistants') is not None:
+            self.scene = Scene.CTRLCENTER_ASSISTANT
         elif self.find('infra_overview') is not None:
             self.scene = Scene.INFRA_MAIN
         elif self.find('infra_todo') is not None:
@@ -220,12 +226,25 @@ class Recognizer(object):
         if config.SCREENSHOT_PATH is not None:
             self.save_screencap(self.scene)
         logger.info(f'Scene: {self.scene}: {SceneComment[self.scene]}')
+
+        if self.scene == Scene.CONNECTING:
+            self.loading_time += 1
+            if self.loading_time > 1:
+                logger.debug(f"检测到连续等待{self.loading_time}次")
+        else:
+            self.loading_time = 0
+        if self.loading_time > self.LOADING_TIME_LIMIT:
+            logger.info(f"检测到连续等待{self.loading_time}次")
+            self.device.exit()
+            time.sleep(3)
+            self.device.check_current_focus()
+
         return self.scene
 
     def get_infra_scene(self)-> int:
         if self.scene != Scene.UNDEFINED:
             return self.scene
-        if self.find('connecting', scope=((self.w//2, self.h//10*8), (self.w//4*3, self.h))) is not None:
+        if self.find('connecting', scope=((self.w//2, self.h//10*8), (self.w//4*3, self.h)), score=0.1) is not None:
             self.scene = Scene.CONNECTING
         elif self.find('double_confirm') is not None:
             if self.find('network_check') is not None:
@@ -265,6 +284,19 @@ class Recognizer(object):
         if config.SCREENSHOT_PATH is not None:
             self.save_screencap(self.scene)
         logger.info(f'Scene: {self.scene}: {SceneComment[self.scene]}')
+
+        if self.scene == Scene.CONNECTING:
+            self.loading_time += 1
+            if self.loading_time > 1:
+                logger.debug(f"检测到连续等待{self.loading_time}次")
+        else:
+            self.loading_time = 0
+        if self.loading_time > self.LOADING_TIME_LIMIT:
+            logger.info(f"检测到连续等待{self.loading_time}次")
+            self.device.exit()
+            time.sleep(3)
+            self.device.check_current_focus()
+
         return self.scene
 
     def is_black(self) -> None:
