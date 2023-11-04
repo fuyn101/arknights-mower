@@ -2294,16 +2294,18 @@ class BaseSchedulerSolver(BaseSolver):
                 logger.info("间隔未超过设定时间，不启动maa")
             else:
                 """森空岛签到"""
+                depot() 
                 try:
                     if self.skland_config['skland_enable']:
                         skland = SKLand(self.skland_config['skland_info'])
                         skland.attendance()
+                        
                 except RuntimeError as e:
                     logger.info("森空岛签到失败:{}".format(e.__str__()))
 
                 """测试公招用"""
                 if self.recruit_config['recruit_enable']:
-                    #depot()                    
+                                       
                     recruit([], self.send_message_config, self.recruit_config)
                 self.send_message('启动MAA')
                 self.back_to_index()

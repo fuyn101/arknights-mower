@@ -10,8 +10,9 @@ import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 import time
 import re
-
+import csv
 import concurrent.futures
+import datetime
 from ..utils.path import get_path
 
 
@@ -23,8 +24,8 @@ class DepotSolver(BaseSolver):
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
         sift = cv2.SIFT_create()
-        surf = cv2.xfeatures2d.SURF_create(600)
-        self.detector = surf  # 检测器类型
+        #surf = cv2.xfeatures2d.SURF_create(600)
+        self.detector = sift  # 检测器类型
         self.template_images_folder = str(get_path("@internal/dist/new"))  # 模板文件夹
         self.template_images = self.load_template_images(self.detector)  # 模板列表
         self.screenshot_dict = {}  # 所有截图的字典（尽量不重不漏）
@@ -41,7 +42,8 @@ class DepotSolver(BaseSolver):
             use_rec=True,
         )
         self.circle_info = []
-        self.match_result = []  # 匹配的结果
+        self.match_results = []  # 匹配的结果
+        self.translate_results = {}  # 好看的结果
 
     def load_template_images(self, detector) -> list:
         """
@@ -82,7 +84,7 @@ class DepotSolver(BaseSolver):
             self.screenshot_dict[self.screenshot_count] = oldscreenshot  # 1 第一张图片
             logger.info(f"仓库扫描: 把第{self.screenshot_count}页保存进内存中等待识别")
             while True:
-                self.swipe_only((1800, 450), (-300, 0), 100, 2)  # 滑动
+                self.swipe_only((1800, 450), (-300, 0), 200, 2)  # 滑动
                 self.recog.update()
                 newscreenshot = self.recog.gray
                 similarity = self.compare_screenshot(
@@ -104,8 +106,18 @@ class DepotSolver(BaseSolver):
             logger.info(f"仓库扫描: 开始识别图像,需要识别{len(self.image_set)}个图像，很慢 别急")
             # for i in range(len(self.image_set)):
             #     self.match_once(self.image_set[i], self.template_images)
-            parallel_match(self.image_set, self.template_images)
-            logger.info(f"仓库扫描: 识别结果{self.match_result}")
+            self.match_results = parallel_match(self.image_set, self.template_images)
+            self.translate(self.match_results)
+            logger.info(f"仓库扫描: 识别结果{self.translate_results}")
+            keys = ["日期"]
+            keys.append(list(self.translate_results.keys()))
+            values = [datetime.date.today()]
+            values.append(list(self.translate_results.values()))
+            csv_out = str(get_path("@app/tmp/depot.csv"))
+            with open(csv_out, "a", newline="", encoding="utf-8") as csvfile:
+                writer = csv.writer(csvfile)
+                writer.writerow(keys)  # 写入列名
+                writer.writerow(values)  # 写入数据
 
         return True
 
@@ -239,9 +251,8 @@ class DepotSolver(BaseSolver):
             time.sleep(interval)
 
     def compare_screenshot(self, image1, image2):
-        detector = self.detector
-        keypoints1, descriptors1 = detector.detectAndCompute(image1, None)
-        _, descriptors2 = detector.detectAndCompute(image2, None)
+        keypoints1, descriptors1 = self.detector.detectAndCompute(image1, None)
+        _, descriptors2 = self.detector.detectAndCompute(image2, None)
 
         matches = self.matcher.knnMatch(descriptors1, descriptors2, k=2)
         good_matches = []
@@ -251,10 +262,23 @@ class DepotSolver(BaseSolver):
         similarity = len(good_matches) / len(keypoints1) * 100
         return similarity
 
+    def translate(self, results):
+        results_dict = template_dict
+        for result in results:
+            if result == None:
+                pass
+            else:
+                key = result[0]
+                self.translate_results[results_dict[key][0]] = [
+                    result[2],
+                    results_dict[key][1],
+                    result[3],
+                ]
+
 
 def parallel_match(image_set, template_images):
     results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=3) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=5) as executor:
         results = list(
             executor.map(match_once, [(data, template_images) for data in image_set])
         )
@@ -289,8 +313,9 @@ def match_once(data_template):
     """
 
     data, template_images = data_template
-    surf = cv2.xfeatures2d.SURF_create(600)
-    detector = surf  # 检测器类型
+    sift = cv2.SIFT_create()
+    #surf = cv2.xfeatures2d.SURF_create(600)
+    detector = sift  # 检测器类型
     matcher = cv2.FlannBasedMatcher(
         dict(algorithm=0, trees=2), dict(checks=30)
     )  # 初始化一个识别
@@ -305,47 +330,52 @@ def match_once(data_template):
             result_num = engine(num_cut)
             best_match_score, best_match_image = match_score, template_images_name
     logger.info(f"识别: {(center_x,center_y)}")
-
-    match_result = [
-        best_match_image[:-4],
-        result_num[0][0][0],
-        format_str(result_num[0][0][0]),
-        center_x,
-        center_y,
-    ]
-    return match_result
+    try:
+        match_result = [
+            best_match_image[:-4],
+            result_num[0][0][0],
+            format_str(result_num[0][0][0]),
+            (center_x, center_y),
+        ]
+        return match_result
+    except Exception as e:
+        match_result = ["空", "0", 0, (center_x, center_y)]
 
 
 def format_str(s):
-    # 将连续两个以上的点替换为一个点
-    s = re.sub(r"\.{2,}", ".", s)
-    # 移除除了数字、点、和万之外的所有字符
-    s = re.sub(r"[^\d万\.]", "", s)
+    try:
+        # 将连续两个以上的点替换为一个点
+        s = re.sub(r"\.{2,}", ".", s)
+        # 移除除了数字、点、和万之外的所有字符
+        s = re.sub(r"[^\d万\.]", "", s)
 
-    # 将全角数字转换为半角数字
-    s = s.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
+        # 将全角数字转换为半角数字
+        s = s.translate(str.maketrans("０１２３４５６７８９", "0123456789"))
 
-    if s == "":
-        formatted_number = 0
+        if s == "":
+            formatted_number = 0
+            return formatted_number
+
+        # 检查是否有万字符
+
+        if "万" in s:
+            # 如果是 a.b万 的形式，将格式化为 a.b*10000
+            if "." in s:
+                s = s.replace("万", "")
+                integer_part, decimal_part = s.split(".")
+                formatted_number = int(integer_part) * 10000 + int(decimal_part) * 1000
+            # 如果格式是 a万  的形式格式化为 a*10000
+            else:
+                formatted_number = int(s.replace("万", "")) * 10000
+        else:
+            # 如果格式是 a.b 的形式且没有万这个字符，将格式化为 b
+            if "." in s:
+                formatted_number = int(s.split(".")[-1])
+            # 如果没有小数点，返回原始输入
+            else:
+                formatted_number = int(s)
+
         return formatted_number
 
-    # 检查是否有万字符
-
-    if "万" in s:
-        # 如果是 a.b万 的形式，将格式化为 a.b*10000
-        if "." in s:
-            s = s.replace("万", "")
-            integer_part, decimal_part = s.split(".")
-            formatted_number = int(integer_part) * 10000 + int(decimal_part) * 1000
-        # 如果格式是 a万  的形式格式化为 a*10000
-        else:
-            formatted_number = int(s.replace("万", "")) * 10000
-    else:
-        # 如果格式是 a.b 的形式且没有万这个字符，将格式化为 b
-        if "." in s:
-            formatted_number = int(s.split(".")[-1])
-        # 如果没有小数点，返回原始输入
-        else:
-            formatted_number = int(s)
-
-    return formatted_number
+    except Exception as e:
+        return "这张图片识别失败"
