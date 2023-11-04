@@ -16,6 +16,7 @@ from email.mime.multipart import MIMEMultipart
 from .skland import SKLand
 from ..command import recruit, daily_report, mail
 from ..command import depot
+from ..command import recruit, daily_report, mail
 from ..data import agent_list, base_room_list, ocr_error
 from ..utils import character_recognize, detector, segment
 from ..utils.digit_reader import DigitReader
