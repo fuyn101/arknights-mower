@@ -2226,19 +2226,25 @@ class BaseSchedulerSolver(BaseSolver):
         if asst_path not in sys.path:
             sys.path.append(asst_path)
         global Message
-        from asst.asst import Asst
-        from asst.utils import Message, Version, InstanceOptionType
-        from asst.updater import Updater
+
+        try:
+            from asst.asst import Asst
+            from asst.utils import Message, InstanceOptionType
+            logger.info("Maa Python模块导入成功")
+        except Exception as e:
+            logger.error(f'Maa Python模块导入失败：{str(e)}')
+            raise Exception("Maa Python模块导入失败")
 
         try:
             logger.debug(f'开始更新Maa活动关卡导航……')
             ota_tasks_url = 'https://ota.maa.plus/MaaAssistantArknights/api/resource/tasks.json'
             ota_tasks_path = path / 'cache' / 'resource' / 'tasks.json'
             ota_tasks_path.parent.mkdir(parents=True, exist_ok=True)
+            with urllib.request.urlopen(ota_tasks_url) as u:
+                res = u.read().decode('utf-8')
             with open(ota_tasks_path, 'w', encoding='utf-8') as f:
-                with urllib.request.urlopen(ota_tasks_url) as u:
-                    f.write(u.read().decode('utf-8'))
-            logger.info(f'Maa活动关卡导航更新成功！')
+                f.write(res)
+            logger.info(f'Maa活动关卡导航更新成功')
         except Exception as e:
             logger.error(f'Maa活动关卡导航更新失败：{str(e)}')
 
@@ -2459,7 +2465,7 @@ class BaseSchedulerSolver(BaseSolver):
     def recruit_plan_solver(self):
         if ('last_execution' not in self.recruit_config
                 or self.recruit_config['last_execution'] is None
-                or self.recruit_config['last_execution'] <= (datetime.now() - datetime.timedelta(hours=9))):
+                or self.recruit_config['last_execution'] <= (datetime.now() - timedelta(hours=9))):
             recruit([], self.send_message_config, self.recruit_config)
             self.recruit_config['last_execution'] = datetime.now()
 
