@@ -138,7 +138,7 @@ def read_log(conn):
 
 @app.route("/depot/readdepot")
 def read_depot():
-    return depot.read_and_compare_depots()
+    return depot.readcsv()
 
 
 @app.route("/running")
@@ -162,7 +162,7 @@ def start():
     # 创建 tmp 文件夹
     tmp_dir = get_path("@app/tmp")
     tmp_dir.mkdir(exist_ok=True)
-    
+
     read, write = multiprocessing.Pipe()
     mower_process = multiprocessing.Process(
         target=main,

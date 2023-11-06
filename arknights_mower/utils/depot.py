@@ -7,10 +7,14 @@ import os
 from arknights_mower.data import key_mapping
 from .path import get_path
 
-depot_file = get_path('@app/tmp/itemlist.csv')
+depot_file = get_path("@app/tmp/itemlist.csv")
+
 
 def process_itemlist(d):
-    itemlist = {"时间": datetime.datetime.now(), "data": {key: 0 for key in key_mapping.keys()}}
+    itemlist = {
+        "时间": datetime.datetime.now(),
+        "data": {key: 0 for key in key_mapping.keys()},
+    }
 
     itemlist["data"] = json.loads(d["details"]["lolicon"]["data"])
 
@@ -28,13 +32,15 @@ def process_itemlist(d):
         writer = csv.DictWriter(csvfile, fieldnames=fieldnames)
         writer.writerow(itemlist)
 
+
 def read_and_compare_depots():
     def format_data(depot_data):
         deopt_time = depot_data[0]
 
         if not depot_data[1]:  # 如果depot_dict为空
             depot_dict = {"扫描错误请更改连接方式为Maatouch": "向管理员寻求帮助"}
-        else: depot_dict = ast.literal_eval(depot_data[1])
+        else:
+            depot_dict = ast.literal_eval(depot_data[1])
         return deopt_time, depot_dict
 
     def rename_depot(original_dict):
@@ -109,3 +115,32 @@ def read_and_compare_depots():
         result_str,
         depot_new_time,
     ]
+
+
+translate = get_path("@app/tmp/translate.csv")
+
+
+def readcsv():
+    list1 = []
+    with open(translate, "r", encoding="utf-8") as csvfile:
+        csvreader = csv.reader(csvfile)
+        list1 = list(csvreader)
+        xin = list1[-1]
+        jiu = list1[-2]
+    list2 = []
+    result_str_1 = ""
+    for i in range(1, len(xin)):
+        result_str_1 += f'"{eval(xin[i])[1]}":{eval(xin[i])[2]},'
+    result_str_1 = result_str_1[:-1]
+    result_str_1 = "{" + result_str_1 + "}"
+
+    result_str = ""
+    for i in range(1, len(xin)):
+        result_str += f"'{eval(xin[i])[0]}':{eval(xin[i])[2]},"
+    result_str = result_str[:-1]
+    result_str = "{" + result_str + "}"
+    print(result_str)
+    print(result_str_1)
+    abc = eval(result_str)
+
+    return [abc, abc, 0, result_str_1, xin[0]]

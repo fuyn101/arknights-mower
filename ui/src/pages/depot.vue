@@ -4,7 +4,6 @@
       <template #header>
         <Depotpage />
       </template>
-
       <div class="card-container">
         <n-grid x-gap="10px" y-gap="10px" cols="1" responsive="screen">
           <n-gi><n-button @click="copyToClipboard"> 明日方舟工具箱代码</n-button></n-gi>
@@ -80,8 +79,9 @@ const { getDepotinfo } = depotStore
 
 const reportData = ref([])
 const time = ref('')
-const tireData = [ref({}), ref({}), ref({}), ref({}), ref({}), ref({}), ref({}), ref({})]
+const tireData = [ref({}),ref({}), ref({}), ref({}), ref({}), ref({}), ref({}), ref({}), ref({})]
 const cangkuwupin = {
+  资源: tireData[8].value,
   稀有度5: tireData[0].value,
   稀有度4: tireData[1].value,
   稀有度3: tireData[2].value,
@@ -100,7 +100,8 @@ const sort = (tireList, targetData) => {
 }
 
 const tireCategories = [
-  ['烧结核凝晶', '晶体电子单元', 'D32钢', '双极纳米片', '聚合剂'],
+
+  ['烧结核凝晶', '晶体电子单元', 'D32钢', '双极纳米片', '聚合剂',],
   [
     '提纯源岩',
     '改量装置',
@@ -172,7 +173,8 @@ const tireCategories = [
     '特种芯片',
     '采购凭证',
     '芯片助剂'
-  ]
+  ],
+  ['龙门币','至纯源石','高级作战记录','中级作战记录','初级作战记录','基础作战记录','赤金']
 ]
 
 onMounted(async () => {
