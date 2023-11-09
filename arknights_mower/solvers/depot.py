@@ -14,6 +14,14 @@ import csv
 import concurrent.futures
 import datetime
 from ..utils.path import get_path
+import cv2
+import os
+import multiprocessing
+import functools
+import itertools
+
+
+surf_arg = {"upright": True, "extended": False, "hessianThreshold": 100}
 
 
 class DepotSolver(BaseSolver):
@@ -23,29 +31,28 @@ class DepotSolver(BaseSolver):
 
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
-        # sift = cv2.SIFT_create()
-        surf = cv2.xfeatures2d.SURF_create(600)
+        sift = cv2.SIFT_create()
+        surf = cv2.xfeatures2d.SURF_create(**surf_arg)
         self.detector = surf  # 检测器类型
+
         self.template_images_folder = str(get_path("@internal/dist/new"))  # 模板文件夹
-        self.template_images = self.load_template_images(self.detector)  # 模板列表
+        self.template_images = []  # 模板列表
         self.screenshot_dict = {}  # 所有截图的字典（尽量不重不漏）
         self.screenshot_count = 1  # 所有截图的列表的计数器
-        self.image_set = []  # 每一张图像，数字，xy相对坐标
+
+        self.image_set = []  # 每一张图像，数字，x y相对坐标
         self.matcher = cv2.FlannBasedMatcher(
-            dict(algorithm=0, trees=2), dict(checks=30)
+            dict(algorithm=1, trees=2), dict(checks=50)
         )  # 初始化一个识别
-        self.engine = RapidOCR(
-            text_score=0.3,
-            use_det=False,
-            use_angle_cls=False,
-            use_cls=False,
-            use_rec=True,
-        )
+        self.crop_width = 70
+        self.scale_factor = 0.85
         self.circle_info = []
         self.match_results = []  # 匹配的结果
         self.translate_results = {}  # 好看的结果
 
-    def load_template_images(self, detector) -> list:
+        self.load_template_images()
+
+    def load_template_images(self) -> None:
         """
         加载给定文件夹中的模板图片。
         Returns:
@@ -53,21 +60,33 @@ class DepotSolver(BaseSolver):
 
         """
         load_template_images = time.time()
-        template_images = []
 
-        for template_image_str in os.listdir(self.template_images_folder):
-            template_file_path = os.path.join(
-                self.template_images_folder, template_image_str
-            )
-            template_grey = cv2.imread(template_file_path, 0)
-            _, des2 = detector.detectAndCompute(template_grey, None)
-            template_images.append([template_image_str, des2])
         logger.info("Start: 仓库扫描预备，导入模板物品")
-        logger.info(
-            f"仓库扫描：模板图片加载完成，有{len(template_images)}张图片,用时{time.time() - load_template_images}"
-        )
+        for template_image_str in os.listdir(self.template_images_folder):
+            template_file_path = str(
+                os.path.join(self.template_images_folder, template_image_str),
+            )
 
-        return template_images
+            template_img = cv2.imread(template_file_path, cv2.IMREAD_COLOR)
+            template_img = cv2.resize(
+                template_img, None, fx=1 / self.scale_factor, fy=1 / self.scale_factor
+            )
+            self.template_images.append(
+                [
+                    template_image_str,
+                    template_img[
+                        template_img.shape[0] // 2
+                        - self.crop_width : template_img.shape[0] // 2
+                        + self.crop_width,
+                        template_img.shape[1] // 2
+                        - self.crop_width : template_img.shape[1] // 2
+                        + self.crop_width,
+                    ],
+                ]
+            )
+        logger.info(
+            f"仓库扫描：模板图片加载完成，有{len(self.template_images)}张图片,用时{time.time() - load_template_images}"
+        )
 
     def run(self) -> None:
         logger.info("Start: 仓库扫描")
@@ -79,14 +98,17 @@ class DepotSolver(BaseSolver):
         if self.scene() == Scene.INDEX:
             logger.info("仓库扫描: 从主界面点击仓库界面")
             self.tap_themed_element("index_warehouse")
-            oldscreenshot = self.recog.gray
+
+            oldscreenshot = self.recog.img
+            oldscreenshot = cv2.cvtColor(oldscreenshot, cv2.COLOR_RGB2BGR)
             self.recog.update()
             self.screenshot_dict[self.screenshot_count] = oldscreenshot  # 1 第一张图片
             logger.info(f"仓库扫描: 把第{self.screenshot_count}页保存进内存中等待识别")
             while True:
                 self.swipe_only((1800, 450), (-400, 0), 200, 2)  # 滑动
                 self.recog.update()
-                newscreenshot = self.recog.gray
+                newscreenshot = self.recog.img
+                newscreenshot = cv2.cvtColor(newscreenshot, cv2.COLOR_RGB2BGR)
                 similarity = self.compare_screenshot(
                     self.screenshot_dict[self.screenshot_count], newscreenshot
                 )
@@ -103,22 +125,23 @@ class DepotSolver(BaseSolver):
             logger.info(f"仓库扫描: 开始计算裁切图像")
             for screenshot_times, screenshot_img in self.screenshot_dict.items():
                 self.read_circle_and_cut_screenshot(screenshot_times, screenshot_img)
+            num_processes = 10  # 设置并行处理的进程数量
             logger.info(f"仓库扫描: 开始识别图像,需要识别{len(self.image_set)}个图像，很慢 别急")
-            # for i in range(len(self.image_set)):
-            #     self.match_once(self.image_set[i], self.template_images)
-            self.match_results = parallel_match(self.image_set, self.template_images)
+            partial_match_template_for_item = functools.partial(
+                _match_template_for_item, template_images=self.template_images
+            )
+            with multiprocessing.Pool(processes=num_processes) as pool:
+                self.match_results = pool.map(
+                    partial_match_template_for_item, self.image_set
+                )
             self.translate(self.match_results)
-            logger.info(f"仓库扫描: 识别结果{self.translate_results}")
-            csv_out = str(get_path("@app/tmp/depot.csv"))
-            valuea = [datetime.date.today()]
-            valuea += self.translate_results.values()
-            with open(csv_out, "a", newline="", encoding="utf-8") as csvfile:
-                writer = csv.writer(csvfile)
-                writer.writerow(valuea)
+            logger.info(
+                f"仓库扫描: 识别完成,共{len(self.translate_results)}个结果,{self.translate_results}"
+            )
 
         return True
 
-    def read_circle_and_cut_screenshot(self, screenshot_times, screenshot_grey):
+    def read_circle_and_cut_screenshot(self, screenshot_times, screenshot_img):
         """
         从灰度图像中检测圆。
 
@@ -129,9 +152,14 @@ class DepotSolver(BaseSolver):
         Returns:
             List[Tuple[int, int]]: 包含检测到的圆信息的列表。每个圆由其圆心坐标和半径表示。
         """
-        circle_info = []
         from_screenshot_read_circle_time = time.time()
-        screenshot_out = np.copy(screenshot_grey)
+
+        circle_info = []
+
+        screenshot_cut = np.copy(screenshot_img)
+        screenshot_out = np.copy(screenshot_img)
+
+        screenshot_grey = cv2.cvtColor(screenshot_img, cv2.COLOR_RGB2GRAY)
         medianBlur = cv2.medianBlur(screenshot_grey, 5)
         def_Radius = 81
         dt = 0
@@ -157,78 +185,66 @@ class DepotSolver(BaseSolver):
                     screenshot_out, (circle[0], circle[1]), radius, (0, 0, 255), 5
                 )
 
-                cv2.imwrite(f"{path}/screenshot-{screenshot_times}.png", screenshot_out)
                 circle_info.append([circle[0], circle[1]])
+            cv2.imwrite(f"{path}/screenshot-{screenshot_times}.png", screenshot_out)
 
             x_counts = {}
-            y_counts = {}
+
             for coord in circle_info:
-                x, y = coord
+                x, _ = coord
                 x_counts[x] = x_counts.get(x, 0) + 1
-                y_counts[y] = y_counts.get(y, 0) + 1
             most_common_x = max(x_counts, key=x_counts.get)
-            most_common_y = max(y_counts, key=y_counts.get)
-            y_gap = 286
+
             x_gap = 233
-            num_x = 48
-            num_y = 137
-            num_width = 110
-            num_height = 50
+
             x = most_common_x // x_gap
             x = most_common_x - x * x_gap
 
-            y = most_common_y // y_gap
-            y = most_common_y - y * y_gap
             square_length = 187
 
-            for x_t in range(8):
-                for y_t in range(3):
-                    x_value = x + x_t * x_gap
-                    y_value = y + y_t * y_gap
-                    if (
-                        x_value + square_length // 2 < 1920
-                        and x_value - square_length // 2 > 0
-                    ):
-                        if (
-                            y_value + square_length // 2 < 1080
-                            and y_value - square_length // 2 > 0
-                        ):
-                            square_top_left = (
-                                x_value - square_length // 2,
-                                y_value - square_length // 2,
-                            )
-                            square_bottom_right = (
-                                x_value + square_length // 2,
-                                y_value + square_length // 2,
-                            )
-                            cropped_square = screenshot_grey[
-                                square_top_left[1] : square_bottom_right[1],
-                                square_top_left[0] : square_bottom_right[0],
-                            ]
-                            cut_image = cropped_square[
-                                num_y : num_y + num_height, num_x : num_x + num_width
-                            ]
-                            cut_image = cv2.resize(
-                                cut_image,
-                                (80 * 3, 40 * 3),
-                                interpolation=cv2.INTER_LINEAR,
-                            )
-                            cut_image = cv2.threshold(
-                                cut_image, 220, 255, cv2.THRESH_BINARY
-                            )[1]
+            x_values = np.arange(x, x + 8 * x_gap, x_gap)
+            y_values = np.arange(283, 283 + 3 * 286, 286)
 
-                            cv2.imwrite(
-                                f"{path}/cropped_square-{screenshot_times}-{x_value},{y_value}.png",
-                                cropped_square,
-                            )
+            for x_value, y_value in itertools.product(x_values, y_values):
+                if (
+                    x_value + square_length // 2 < 1920
+                    and x_value - square_length // 2 > 0
+                ):
+                    square_top_left = (
+                        x_value - square_length // 2,
+                        y_value - square_length // 2,
+                    )
+                    square_bottom_right = (
+                        x_value + square_length // 2,
+                        y_value + square_length // 2,
+                    )
+                    square = screenshot_cut[
+                        square_top_left[1] : square_bottom_right[1],
+                        square_top_left[0] : square_bottom_right[0],
+                    ]
 
-                            cv2.imwrite(
-                                f"{path}/num_cut-{screenshot_times}-{x_value},{y_value}.png",
-                                cut_image,
-                            )
-                            self.image_set.append(
-                                [cropped_square, cut_image, x_value, y_value]
-                            )
+                    cut_image = np.copy(square[130:170, :])
+
+                    cropped_square = np.copy(
+                        square[
+                            square.shape[0] // 2
+                            - self.crop_width : square.shape[0] // 2
+                            + self.crop_width,
+                            square.shape[1] // 2
+                            - self.crop_width : square.shape[1] // 2
+                            + self.crop_width,
+                        ]
+                    )
+
+                    cut_image[
+                        cv2.inRange(cut_image, (220, 220, 220), (255, 255, 255)) == 0
+                    ] = [0, 0, 0]
+                    cut_image = cv2.cvtColor(cut_image, cv2.COLOR_RGB2GRAY)
+                    cv2.imwrite(
+                        f"{path}/num_cut-{screenshot_times}-{x_value},{y_value}.png",
+                        cut_image,
+                    )
+                    self.image_set.append([cropped_square, cut_image, x_value, y_value])
             logger.info(
                 f"处理第{screenshot_times}张图像，用时{time.time()-from_screenshot_read_circle_time}"
             )
@@ -249,6 +265,8 @@ class DepotSolver(BaseSolver):
             time.sleep(interval)
 
     def compare_screenshot(self, image1, image2):
+        image1 = cv2.cvtColor(image1, cv2.COLOR_RGB2GRAY)
+        image2 = cv2.cvtColor(image2, cv2.COLOR_RGB2GRAY)
         keypoints1, descriptors1 = self.detector.detectAndCompute(image1, None)
         _, descriptors2 = self.detector.detectAndCompute(image2, None)
 
@@ -272,16 +290,8 @@ class DepotSolver(BaseSolver):
                     results_dict[key][2],
                     result[2],
                     results_dict[key][1],
+                    key,
                 ]
-
-
-def parallel_match(image_set, template_images):
-    results = []
-    with concurrent.futures.ProcessPoolExecutor(max_workers=3) as executor:
-        results = list(
-            executor.map(match_once, [(data, template_images) for data in image_set])
-        )
-    return results
 
 
 engine = RapidOCR(
@@ -293,52 +303,36 @@ engine = RapidOCR(
 )
 
 
-def match_once(data_template):
-    """
-    用于在给定的图片数据和图片集中寻找最佳匹配的函数。
+def _match_template_for_item(args, template_images):
+    best_match_score = 0
+    best_template_filename = None
+    best_img = None
+    item_img, num_img, x, y = args
 
-    Args:
-        data (tuple): 包含截取的方形区域和数字区域的图像数据。
-            data[0]: 截取的方形区域的图像（numpy.ndarray）。
-            data[1]: 数字区域的图像（numpy.ndarray）。
-        template_images (list): 包含待匹配图像数据的列表。
-            每个元素为一个tuple，包含图像名称和对应的图像数据。
-            例如：[("image1.png", image_data1), ("image2.png", image_data2), ...]
+    for template_filename, template_img in template_images:
+        result = cv2.matchTemplate(template_img, item_img, cv2.TM_CCOEFF_NORMED)
+        _, max_val, _, _ = cv2.minMaxLoc(result)
 
-    Returns:
-        list: 包含匹配结果的列表。
-                results[0]: 最佳匹配的图像名称（str）。
-                results[1]: 识别出的数字（str）。
-    """
+        if max_val > best_match_score:
+            best_match_score = max_val
+            result_num = engine(num_img)
+            best_template_filename = template_filename
+            best_img = template_img
 
-    data, template_images = data_template
-    # sift = cv2.SIFT_create()
-    surf = cv2.xfeatures2d.SURF_create(600)
-    detector = surf  # 检测器类型
-    matcher = cv2.FlannBasedMatcher(
-        dict(algorithm=0, trees=2), dict(checks=30)
-    )  # 初始化一个识别
-
-    (screenshot_cropped_square, num_cut, center_x, center_y) = data
-    _, des1 = detector.detectAndCompute(screenshot_cropped_square, None)
-    best_match_score, best_match_image = 0, None
-    for template_images_name, des2 in template_images:
-        matches = matcher.knnMatch(des1, des2, k=2)
-        match_score = len([m for m, n in matches if m.distance < 0.7 * n.distance])
-        if match_score > best_match_score:
-            result_num = engine(num_cut)
-            best_match_score, best_match_image = match_score, template_images_name
-    logger.debug(f"识别: {(center_x,center_y)}")
-    try:
-        match_result = [
-            best_match_image[:-4],
-            result_num[0][0][0],
-            format_str(result_num[0][0][0]),
-            (center_x, center_y),
-        ]
-        return match_result
-    except Exception as e:
-        match_result = ["空", "0", 0, (center_x, center_y)]
+    best_each = cv2.hconcat([item_img, best_img])
+    path = get_path("@app/screenshot/depot")
+    cv2.imwrite(
+        f"{path}/two-img{best_template_filename}+{(x, y)}.png",
+        best_each,
+    )
+    logger.debug(f"{best_template_filename}, {(x, y)}")
+    match_results = [
+        best_template_filename[:-4],
+        result_num[0][0][0],
+        format_str(result_num[0][0][0]),
+        (x, y),
+    ]
+    return match_results
 
 
 def format_str(s):
@@ -377,4 +371,5 @@ def format_str(s):
         return formatted_number
 
     except Exception as e:
+        logger.error(f"这张图片识别失败")
         return "这张图片识别失败"
