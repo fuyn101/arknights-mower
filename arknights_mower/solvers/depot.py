@@ -1,7 +1,7 @@
 from ..utils import typealias as tp
 from ..utils.device import Device
 from ..utils.log import logger
-from ..utils.recognize import RecognizeError, Recognizer, Scene
+from ..utils.recognize import Recognizer, Scene
 from ..utils.solver import BaseSolver
 from ..data import template_dict
 import os
@@ -10,16 +10,14 @@ import numpy as np
 from rapidocr_onnxruntime import RapidOCR
 import time
 import re
-import csv
-import concurrent.futures
-import datetime
 from ..utils.path import get_path
 import cv2
 import os
 import multiprocessing
 import functools
 import itertools
-
+from .. import __rootdir__
+from pathlib import Path
 
 surf_arg = {"upright": True, "extended": False, "hessianThreshold": 100}
 
@@ -32,9 +30,10 @@ class DepotSolver(BaseSolver):
     def __init__(self, device: Device = None, recog: Recognizer = None) -> None:
         super().__init__(device, recog)
         sift = cv2.SIFT_create()
-        surf = cv2.xfeatures2d.SURF_create(**surf_arg)
-        self.detector = surf  # 检测器类型
+        # surf = cv2.xfeatures2d.SURF_create(**surf_arg)
+        self.detector = sift  # 检测器类型
 
+        self.numdict = []
         self.template_images_folder = str(get_path("@internal/dist/new"))  # 模板文件夹
         self.template_images = []  # 模板列表
         self.screenshot_dict = {}  # 所有截图的字典（尽量不重不漏）
@@ -49,7 +48,7 @@ class DepotSolver(BaseSolver):
         self.circle_info = []
         self.match_results = []  # 匹配的结果
         self.translate_results = {}  # 好看的结果
-
+        self.num_template_images = []
         self.load_template_images()
 
     def load_template_images(self) -> None:
@@ -125,7 +124,7 @@ class DepotSolver(BaseSolver):
             logger.info(f"仓库扫描: 开始计算裁切图像")
             for screenshot_times, screenshot_img in self.screenshot_dict.items():
                 self.read_circle_and_cut_screenshot(screenshot_times, screenshot_img)
-            num_processes = 10  # 设置并行处理的进程数量
+            num_processes = 3  # 设置并行处理的进程数量
             logger.info(f"仓库扫描: 开始识别图像,需要识别{len(self.image_set)}个图像，很慢 别急")
             partial_match_template_for_item = functools.partial(
                 _match_template_for_item, template_images=self.template_images
@@ -222,9 +221,6 @@ class DepotSolver(BaseSolver):
                         square_top_left[1] : square_bottom_right[1],
                         square_top_left[0] : square_bottom_right[0],
                     ]
-
-                    cut_image = np.copy(square[130:170, :])
-
                     cropped_square = np.copy(
                         square[
                             square.shape[0] // 2
@@ -235,15 +231,7 @@ class DepotSolver(BaseSolver):
                             + self.crop_width,
                         ]
                     )
-
-                    cut_image[
-                        cv2.inRange(cut_image, (220, 220, 220), (255, 255, 255)) == 0
-                    ] = [0, 0, 0]
-                    cut_image = cv2.cvtColor(cut_image, cv2.COLOR_RGB2GRAY)
-                    cv2.imwrite(
-                        f"{path}/num_cut-{screenshot_times}-{x_value},{y_value}.png",
-                        cut_image,
-                    )
+                    cut_image = np.copy(square[130:170, :])
                     self.image_set.append([cropped_square, cut_image, x_value, y_value])
             logger.info(
                 f"处理第{screenshot_times}张图像，用时{time.time()-from_screenshot_read_circle_time}"
@@ -303,10 +291,78 @@ engine = RapidOCR(
 )
 
 
+def load_num_template_images(num_template_dir):
+    num_template_images = []
+    for filename in os.listdir(num_template_dir):
+        file_path = os.path.join(num_template_dir, filename)
+        num_template_images.append([cv2.imread(file_path, 0), filename])
+    return num_template_images
+
+
+num_template_dir = str(Path(f"{__rootdir__}/resources/digits"))
+num_template_images = load_num_template_images(num_template_dir)
+
+
+def read_num(num_item_image, x, y, distance_threshold=5, threshold=0.8):
+    # Crop the region of interest
+
+    # Initialize variables
+    num_right_bottom_coordinates = []
+    num_list = []
+    num_gray_item = np.copy(num_item_image)
+    num_gray_item = cv2.cvtColor(num_gray_item, cv2.COLOR_BGR2GRAY)
+    for num_template_image, num_template_label in num_template_images:
+        # Template matching
+        num_result = cv2.matchTemplate(
+            num_gray_item, num_template_image, cv2.TM_CCOEFF_NORMED
+        )
+
+        # Get matching locations
+        num_loc = np.where(num_result >= threshold)
+
+        # Get template width and height
+        num_template_width, num_template_height = num_template_image.shape[:2]
+
+        # Loop through matching locations and draw rectangles on the item image
+        for pt in zip(*num_loc[::-1]):
+            num_top_left = pt
+            num_bottom_right = (
+                num_top_left[0] + num_template_height,
+                num_top_left[1] + num_template_width,
+            )
+
+            # Check if coordinates are far enough from previous ones
+            if all(
+                np.linalg.norm(np.array(coord) - np.array(num_bottom_right))
+                > distance_threshold
+                for coord in num_right_bottom_coordinates
+            ):
+                # Store right bottom coordinates
+                num_right_bottom_coordinates.append(num_bottom_right)
+                num_number = num_template_label[6:-4]
+                num_list.append([num_bottom_right[0], num_number, (x, y)])
+                # Draw rectangle on the item image
+                cv2.rectangle(num_item_image, num_top_left, num_bottom_right, (200), 2)
+
+    # Sort and process num_list
+    num_sorted = sorted(num_list, key=lambda x: x[0])
+
+    num_str = ""
+    for _, num_template_img, _ in num_sorted:
+        num_temp = num_str
+        num_all = num_temp + num_template_img
+        num_str = num_all.replace("10000", "万").replace("dot", "..").replace("..", ".")
+    # Save result image
+    # cv2.imwrite(os.path.join(self.result_dir, f"{(x, y)}.png"), num_item_image)
+
+    return num_str
+
+
 def _match_template_for_item(args, template_images):
     best_match_score = 0
     best_template_filename = None
     best_img = None
+    best_num_img=None
     item_img, num_img, x, y = args
 
     for template_filename, template_img in template_images:
@@ -315,10 +371,12 @@ def _match_template_for_item(args, template_images):
 
         if max_val > best_match_score:
             best_match_score = max_val
-            result_num = engine(num_img)
+            best_num_img = num_img
+            # result_num = engine(num_img)
+
             best_template_filename = template_filename
             best_img = template_img
-
+    result_num = read_num(best_num_img, x, y)
     best_each = cv2.hconcat([item_img, best_img])
     path = get_path("@app/screenshot/depot")
     cv2.imwrite(
@@ -328,9 +386,9 @@ def _match_template_for_item(args, template_images):
     logger.debug(f"{best_template_filename}, {(x, y)}")
     match_results = [
         best_template_filename[:-4],
-        result_num[0][0][0],
-        format_str(result_num[0][0][0]),
-        (x, y),
+        result_num,
+        # format_str(result_num[0][0][0]),
+        format_str(result_num),
     ]
     return match_results
 
