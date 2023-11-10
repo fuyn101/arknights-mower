@@ -1,7 +1,9 @@
 import atexit
 import os
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
+
+
 from arknights_mower.utils.log import logger
 import json
 
@@ -15,6 +17,8 @@ from arknights_mower.utils.path import get_path
 from arknights_mower.utils.plan import Plan, PlanConfig, Room
 from arknights_mower.utils.logic_expression import LogicExpression
 from arknights_mower.utils import rapidocr
+
+from evalidate import Expr
 
 conf = {}
 plan = {}
@@ -247,6 +251,8 @@ def initialize(tasks, scheduler=None):
                 "sendKey": conf["sendKey"],
             }
         }
+        base_scheduler.check_mail_enable = conf['check_mail_enable']
+        base_scheduler.report_enable = conf['report_enable']
 
         new_conf = update_conf()
         set_maa_options(base_scheduler, new_conf)
@@ -310,8 +316,8 @@ def simulate():
     if operators != {}:
         for k, v in operators.items():
             if (
-                k in base_scheduler.op_data.operators
-                and not base_scheduler.op_data.operators[k].room.startswith("dorm")
+                    k in base_scheduler.op_data.operators
+                    and not base_scheduler.op_data.operators[k].room.startswith("dorm")
             ):
                 # 只复制心情数据
                 base_scheduler.op_data.operators[k].mood = v.mood
@@ -338,11 +344,14 @@ def simulate():
                 set_skland_options(base_scheduler, new_conf)
 
                 if sleep_time > 540:
-                    if base_scheduler.daily_mission is False:
-                        base_scheduler.daily_mission = True
+                    # 刷新时间以鹰历为准
+                    if base_scheduler.daily_mission != (datetime.now() - timedelta(hours=4)).date():
+
                         base_scheduler.mail_plan_solver()
-                    if base_scheduler.skland_config["skland_enable"] == 1:
-                        base_scheduler.skland_plan_solover()
+                        if base_scheduler.report_plan_solver():
+                            base_scheduler.daily_mission = (datetime.now() - timedelta(hours=4)).date()
+                        if base_scheduler.skland_config["skland_enable"] == 1:
+                            base_scheduler.skland_plan_solover()
                     if base_scheduler.recruit_config['recruit_enable'] == 1:
                         base_scheduler.recruit_plan_solver()
                     if base_scheduler.maa_config["maa_enable"] == 1:
@@ -452,7 +461,7 @@ def load_state(file="state.json"):
         return None
     with open(state_file, 'r') as f:
         state = json.load(f)
-    operators = {k: eval(v) for k, v in state["operators"].items()}
+    operators = {k: Expr(v).eval() for k, v in state["operators"].items()}
     for k, v in operators.items():
         if not v.time_stamp == "None":
             v.time_stamp = datetime.strptime(v.time_stamp, "%Y-%m-%d %H:%M:%S.%f")
