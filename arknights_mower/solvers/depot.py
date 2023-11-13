@@ -18,6 +18,7 @@ import functools
 import itertools
 from .. import __rootdir__
 from pathlib import Path
+import json
 
 surf_arg = {"upright": True, "extended": False, "hessianThreshold": 100}
 
@@ -50,6 +51,7 @@ class DepotSolver(BaseSolver):
         self.translate_results = {}  # 好看的结果
         self.num_template_images = []
         self.load_template_images()
+        self.depot_file = get_path("@app/tmp/dictresult.csv")
 
     def load_template_images(self) -> None:
         """
@@ -137,7 +139,10 @@ class DepotSolver(BaseSolver):
             logger.info(
                 f"仓库扫描: 识别完成,共{len(self.translate_results)}个结果,{self.translate_results}"
             )
-
+            with open(self.depot_file, "w", encoding="utf-8") as json_file:
+                json.dump(
+                    self.translate_results, json_file, ensure_ascii=False, indent=2
+                )
         return True
 
     def read_circle_and_cut_screenshot(self, screenshot_times, screenshot_img):
@@ -185,7 +190,7 @@ class DepotSolver(BaseSolver):
                 )
 
                 circle_info.append([circle[0], circle[1]])
-            cv2.imwrite(f"{path}/screenshot-{screenshot_times}.png", screenshot_out)
+            cv2.imwrite(f"{path}/screenshot_{screenshot_times}.png", screenshot_out)
 
             x_counts = {}
 
@@ -307,6 +312,7 @@ def read_num(num_item_image, x, y, distance_threshold=5, threshold=0.8):
     # Crop the region of interest
 
     # Initialize variables
+    result_dir = get_path("@app/screenshot/depot")
     num_right_bottom_coordinates = []
     num_list = []
     num_gray_item = np.copy(num_item_image)
@@ -351,9 +357,9 @@ def read_num(num_item_image, x, y, distance_threshold=5, threshold=0.8):
     for _, num_template_img, _ in num_sorted:
         num_temp = num_str
         num_all = num_temp + num_template_img
-        num_str = num_all.replace("10000", "万").replace("dot", "..").replace("..", ".")
+        num_str = num_all.replace("10000", "万").replace("dot", ".").replace("..", ".")
     # Save result image
-    # cv2.imwrite(os.path.join(self.result_dir, f"{(x, y)}.png"), num_item_image)
+    cv2.imwrite(os.path.join(result_dir, f"two_num_{x},{y}.png"), num_item_image)
 
     return num_str
 
@@ -362,7 +368,7 @@ def _match_template_for_item(args, template_images):
     best_match_score = 0
     best_template_filename = None
     best_img = None
-    best_num_img=None
+    best_num_img = None
     item_img, num_img, x, y = args
 
     for template_filename, template_img in template_images:
@@ -370,6 +376,7 @@ def _match_template_for_item(args, template_images):
         _, max_val, _, _ = cv2.minMaxLoc(result)
 
         if max_val > best_match_score:
+            print(max_val)
             best_match_score = max_val
             best_num_img = num_img
             # result_num = engine(num_img)
@@ -380,7 +387,7 @@ def _match_template_for_item(args, template_images):
     best_each = cv2.hconcat([item_img, best_img])
     path = get_path("@app/screenshot/depot")
     cv2.imwrite(
-        f"{path}/two-img{best_template_filename}+{(x, y)}.png",
+        f"{path}/two_img_{best_template_filename}_{x},{y}.png",
         best_each,
     )
     logger.debug(f"{best_template_filename}, {(x, y)}")
@@ -394,6 +401,7 @@ def _match_template_for_item(args, template_images):
 
 
 def format_str(s):
+    origin = s
     try:
         # 将连续两个以上的点替换为一个点
         s = re.sub(r"\.{2,}", ".", s)
@@ -430,4 +438,4 @@ def format_str(s):
 
     except Exception as e:
         logger.error(f"这张图片识别失败")
-        return "这张图片识别失败"
+        return f"{origin},这张图片识别失败"

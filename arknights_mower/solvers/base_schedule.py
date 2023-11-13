@@ -2276,3 +2276,5 @@ class BaseSchedulerSolver(BaseSolver, BaseMixin):
     def report_plan_solver(self):
         if self.report_enable:
             return daily_report()
+    def depot_plan_solver(self):
+        return depot()
