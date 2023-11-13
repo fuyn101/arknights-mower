@@ -115,32 +115,3 @@ def read_and_compare_depots():
         result_str,
         depot_new_time,
     ]
-
-
-translate = get_path("@app/tmp/translate.csv")
-
-
-def readcsv():
-    list1 = []
-    with open(translate, "r", encoding="utf-8") as csvfile:
-        csvreader = csv.reader(csvfile)
-        list1 = list(csvreader)
-        xin = list1[-1]
-        jiu = list1[-2]
-    list2 = []
-    result_str_1 = ""
-    for i in range(1, len(xin)):
-        result_str_1 += f'"{eval(xin[i])[1]}":{eval(xin[i])[2]},'
-    result_str_1 = result_str_1[:-1]
-    result_str_1 = "{" + result_str_1 + "}"
-
-    result_str = ""
-    for i in range(1, len(xin)):
-        result_str += f"'{eval(xin[i])[0]}':{eval(xin[i])[2]},"
-    result_str = result_str[:-1]
-    result_str = "{" + result_str + "}"
-    print(result_str)
-    print(result_str_1)
-    abc = eval(result_str)
-
-    return [abc, abc, 0, result_str_1, xin[0]]
