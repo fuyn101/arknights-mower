@@ -13,7 +13,7 @@ from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
 
 from .skland import SKLand
-from ..command import recruit, mail, daily_report
+from ..command import recruit, mail, daily_report,depot
 from ..data import agent_list, base_room_list, ocr_error
 from ..utils import character_recognize, detector, segment
 from ..utils.digit_reader import DigitReader
@@ -2305,3 +2305,5 @@ class BaseSchedulerSolver(BaseSolver, BaseMixin):
     def report_plan_solver(self):
         if self.report_enable:
             return daily_report()
+    def depot_plan_solver(self):
+        return depot()
