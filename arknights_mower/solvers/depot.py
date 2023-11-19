@@ -300,7 +300,7 @@ def load_num_template_images(num_template_dir):
     num_template_images = []
     for filename in os.listdir(num_template_dir):
         file_path = os.path.join(num_template_dir, filename)
-        num_template_images.append([cv2.imread(file_path, 0), filename])
+        num_template_images.append(cv2.imread(file_path, cv2.IMREAD_GRAYSCALE))
     return num_template_images
 
 
@@ -308,60 +308,44 @@ num_template_dir = str(Path(f"{__rootdir__}/resources/digits"))
 num_template_images = load_num_template_images(num_template_dir)
 
 
-def read_num(num_item_image, x, y, distance_threshold=5, threshold=0.8):
+def read_num(num_item_image, x, y, distance_threshold=5, threshold=0.85):
     # Crop the region of interest
 
     # Initialize variables
     result_dir = get_path("@app/screenshot/depot")
-    num_right_bottom_coordinates = []
-    num_list = []
     num_gray_item = np.copy(num_item_image)
-    num_gray_item = cv2.cvtColor(num_gray_item, cv2.COLOR_BGR2GRAY)
-    for num_template_image, num_template_label in num_template_images:
-        # Template matching
-        num_result = cv2.matchTemplate(
-            num_gray_item, num_template_image, cv2.TM_CCOEFF_NORMED
+    num_gray_item=cv2.cvtColor(num_gray_item,cv2.COLOR_BGR2GRAY)
+
+    result = {}
+    for j in range(len(num_template_images)):
+        res = cv2.matchTemplate(
+            num_gray_item,
+            num_template_images[j],
+            cv2.TM_CCORR_NORMED,
         )
 
-        # Get matching locations
-        num_loc = np.where(num_result >= threshold)
+        loc = np.where(res >= threshold)
+        for i in range(len(loc[0])):
+            pos_x = loc[1][i]
+            accept = True
+            for o in result:
+                if abs(o - pos_x) < 5:
+                    accept = False
+                    break
+            if accept:
+                result[loc[1][i]] = j
 
-        # Get template width and height
-        num_template_width, num_template_height = num_template_image.shape[:2]
+    number = ""
+    for k in sorted(result):
+        if int("".join(str(result[k]))) < 10:
+            number = number + ("".join(str(result[k])))
+        elif int("".join(str(result[k]))) == 10:
+            number = number + "万"
+        elif int("".join(str(result[k]))) == 11:
+            number = number + "."
 
-        # Loop through matching locations and draw rectangles on the item image
-        for pt in zip(*num_loc[::-1]):
-            num_top_left = pt
-            num_bottom_right = (
-                num_top_left[0] + num_template_height,
-                num_top_left[1] + num_template_width,
-            )
-
-            # Check if coordinates are far enough from previous ones
-            if all(
-                np.linalg.norm(np.array(coord) - np.array(num_bottom_right))
-                > distance_threshold
-                for coord in num_right_bottom_coordinates
-            ):
-                # Store right bottom coordinates
-                num_right_bottom_coordinates.append(num_bottom_right)
-                num_number = num_template_label[6:-4]
-                num_list.append([num_bottom_right[0], num_number, (x, y)])
-                # Draw rectangle on the item image
-                cv2.rectangle(num_item_image, num_top_left, num_bottom_right, (200), 2)
-
-    # Sort and process num_list
-    num_sorted = sorted(num_list, key=lambda x: x[0])
-
-    num_str = ""
-    for _, num_template_img, _ in num_sorted:
-        num_temp = num_str
-        num_all = num_temp + num_template_img
-        num_str = num_all.replace("10000", "万").replace("dot", ".").replace("..", ".")
-    # Save result image
     cv2.imwrite(os.path.join(result_dir, f"two_num_{x},{y}.png"), num_item_image)
-
-    return num_str
+    return number
 
 
 def _match_template_for_item(args, template_images):
