@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
+import datetime
+import re
+
 import pandas as pd
 import requests
 
 from arknights_mower.solvers import record
 from arknights_mower.solvers.report import get_report_data
+from arknights_mower.solvers.skland import SKLand
 from arknights_mower.utils.conf import load_conf, save_conf, load_plan, write_plan
 from arknights_mower.utils import depot
 from arknights_mower.utils.log import logger
@@ -37,6 +41,8 @@ import pathlib
 
 import tkinter
 from tkinter import messagebox
+
+import platform
 
 mimetypes.add_type("text/html", ".html")
 mimetypes.add_type("text/css", ".css")
@@ -243,15 +249,16 @@ def save_file_dialog():
     if not img:
         return "图片未上传"
     window = webview.active_window()
-    folder_path = window.create_file_dialog(
+    img_path = window.create_file_dialog(
         dialog_type=webview.SAVE_DIALOG,
         save_filename="plan.png",
         file_types=("PNG图片 (*.png)",),
     )
-    if not folder_path:
+    if not img_path:
         return "保存已取消"
-    img_path = folder_path[0]
-    if os.path.exists(img_path):
+    if not isinstance(img_path, str):
+        img_path = img_path[0]
+    if os.path.exists(img_path) and platform.system() == "Linux":
         root = tkinter.Tk()
         root.withdraw()
         replace = messagebox.askyesno(
@@ -292,9 +299,9 @@ def get_maa_adb_version():
 def get_maa_conn_presets():
     try:
         with open(
-                os.path.join(conf["maa_path"], "resource", "config.json"),
-                "r",
-                encoding="utf-8",
+            os.path.join(conf["maa_path"], "resource", "config.json"),
+            "r",
+            encoding="utf-8",
         ) as f:
             presets = [i["configName"] for i in json.load(f)["connection"]]
     except:
@@ -307,34 +314,126 @@ def get_mood_ratios():
     return record.get_mood_ratios()
 
 
+def str2date(target: str):
+    try:
+        return datetime.datetime.strptime(target, "%Y-%m-%d").date()
+    except ValueError:
+        return datetime.datetime.strptime(target, "%Y/%m/%d").date()
+
+
+def date2str(target: datetime.date):
+    try:
+        return datetime.datetime.strftime(target, "%Y-%m-%d")
+    except ValueError:
+        return datetime.datetime.strftime(target, "%Y/%m/%d")
+
+
 @app.route("/report/getReportData")
 def get_report_data():
     record_path = get_path("@app/tmp/report.csv")
     try:
-        format_data = {}
+        format_data = []
         if os.path.exists(record_path) is False:
             logger.debug("基报不存在")
             return False
-        df = pd.read_csv(record_path, encoding='gbk')
-        data = df.to_dict('records')
-
-        # for i in range(len(data) - 1, -1, -1):
-        #     if i < len(data) - 15:
-        #         data.pop(i)
+        df = pd.read_csv(record_path, encoding="gbk")
+        data = df.to_dict("records")
+        earliest_date = str2date(data[0]["Unnamed: 0"])
 
         for item in data:
-            format_data[item['Unnamed: 0']] = {
-                '作战录像': item['作战录像'],
-                '赤金': item['赤金'],
-                '龙门币订单': item['龙门币订单'],
-                '龙门币订单数': item['龙门币订单数'],
-                '合成玉': item['合成玉'],
-                '合成玉订单数量': item['合成玉订单数量']
-            }
-        logger.info(data )
-        return data
+            format_data.append(
+                {
+                    "日期": date2str(
+                        str2date(item["Unnamed: 0"]) - datetime.timedelta(days=1)
+                    ),
+                    "作战录像": item["作战录像"],
+                    "赤金": item["赤金"],
+                    "龙门币订单": item["龙门币订单"],
+                    "龙门币订单数": item["龙门币订单数"],
+                    "每单获取龙门币": int(item["龙门币订单"] / item["龙门币订单数"]),
+                }
+            )
+
+        if len(format_data) < 15:
+            for i in range(1, 16 - len(format_data)):
+                format_data.insert(
+                    0,
+                    {
+                        "日期": date2str(earliest_date - datetime.timedelta(days=i + 1)),
+                        "作战录像": "-",
+                        "赤金": "-",
+                        "龙门币订单": "-",
+                        "龙门币订单数": "-",
+                        "每单获取龙门币": "-",
+                    },
+                )
+        logger.debug(format_data)
+        return format_data
     except PermissionError:
         logger.info("report.csv正在被占用")
+
+
+@app.route("/report/getHalfMonthData")
+def get_half_month_data():
+    record_path = get_path("@app/tmp/report.csv")
+    try:
+        format_data = []
+        if os.path.exists(record_path) is False:
+            logger.debug("基报不存在")
+            return False
+        df = pd.read_csv(record_path, encoding="gbk")
+        data = df.to_dict("records")
+        earliest_date = datetime.datetime.now()
+
+        begin_make_orundum = (earliest_date + datetime.timedelta(days=1)).date()
+        print(begin_make_orundum)
+        if len(data) >= 15:
+            for i in range(len(data) - 1, -1, -1):
+                if 0 < i < len(data) - 15:
+                    data.pop(i)
+                else:
+                    logger.info("合成玉{}".format(data[i]["合成玉"]))
+                    if data[i]["合成玉"] > 0:
+                        begin_make_orundum = str2date(data[i]["Unnamed: 0"])
+        else:
+            for item in data:
+                if item["合成玉"] > 0:
+                    begin_make_orundum = str2date(item["Unnamed: 0"])
+        if begin_make_orundum > earliest_date.date():
+            return format_data
+        total_orundum = 0
+        for item in data:
+            total_orundum = total_orundum + item["合成玉"]
+            format_data.append(
+                {
+                    "日期": date2str(
+                        str2date(item["Unnamed: 0"]) - datetime.timedelta(days=1)
+                    ),
+                    "合成玉": item["合成玉"],
+                    "合成玉订单数量": item["合成玉订单数量"],
+                    "抽数": round((item["合成玉"] / 600), 1),
+                    "累计制造合成玉": total_orundum,
+                }
+            )
+
+        if len(format_data) < 15:
+            earliest_date = str2date(data[0]["Unnamed: 0"])
+            for i in range(1, 16 - len(format_data)):
+                format_data.insert(
+                    0,
+                    {
+                        "日期": date2str(earliest_date - datetime.timedelta(days=i + 1)),
+                        "合成玉": "-",
+                        "合成玉订单数量": "-",
+                        "抽数": "-",
+                        "累计制造合成玉": 0,
+                    },
+                )
+        logger.debug(format_data)
+        return format_data
+    except PermissionError:
+        logger.info("report.csv正在被占用")
+
 
 
 @app.route("/test-email")
@@ -373,29 +472,4 @@ def test_serverJang_push():
 @app.route("/check-skland")
 @require_token
 def test_skland():
-    skland_info = []
-    skland_info = conf["skland_info"]
-
-    request_header = {
-        "user-agent": "Skland/1.0.1 (com.hypergryph.skland; build:100001014; Android 33; ) Okhttp/4.11.0",
-        "cred": "",
-        "vName": "1.0.1",
-        "vCode": "100001014",
-        "Accept-Encoding": "gzip",
-        "Connection": "close",
-        "dId": "de9759a5afaa634f",
-        "platform": "1",
-    }
-    res = []
-    for item in skland_info:
-        data = {"phone": item["account"], "password": item["password"]}
-        response = requests.post(
-            headers=request_header,
-            url="https://as.hypergryph.com/user/auth/v1/token_by_phone_password",
-            data=data,
-        )
-        response_json = json.loads(response.text)
-        temp_res = {"account": item["account"], "msg": response_json["msg"]}
-        res.append(temp_res)
-
-    return res
+    return SKLand(conf["skland_info"]).test_connect()

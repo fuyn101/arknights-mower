@@ -4,6 +4,7 @@
       <template #header>
         <Depotpage />
       </template>
+
       <div class="card-container">
         <n-grid x-gap="10px" y-gap="10px" cols="1" responsive="screen">
           <n-gi><n-button @click="copyToClipboard"> 明日方舟工具箱代码</n-button></n-gi>

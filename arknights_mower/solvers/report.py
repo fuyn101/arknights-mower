@@ -39,7 +39,6 @@ class ReportSolver(BaseSolver):
         self.report_res = {
             "作战录像": None,
             "赤金": None,
-            "赤金数量": 0,
             "龙门币订单": None,
             "龙门币订单数": None,
             "合成玉": None,
@@ -53,9 +52,10 @@ class ReportSolver(BaseSolver):
         logger.info("康康大基报")
         try:
             super().run()
+            return True
         except:
-            return False
-        return True
+            pass
+        return False
 
     def transition(self) -> bool:
         if self.scene() == Scene.INDEX:
@@ -137,13 +137,15 @@ class ReportSolver(BaseSolver):
             if os.path.exists(self.record_path) is False:
                 logger.debug("基报不存在")
                 return False
-            df = pd.read_csv(self.record_path, encoding='gbk')
+            df = pd.read_csv(self.record_path, encoding='gbk', on_bad_lines='skip')
             for item in df.iloc:
                 if item[0] == self.date:
                     return True
             return False
         except PermissionError:
             logger.info("report.csv正在被占用")
+        except pd.errors.EmptyDataError:
+            return False
 
 
 def get_report_data():
@@ -158,5 +160,3 @@ def get_report_data():
         print(data)
     except PermissionError:
         logger.info("report.csv正在被占用")
-
-
