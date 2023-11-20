@@ -2,9 +2,7 @@
 import { storeToRefs } from 'pinia'
 import { useConfigStore } from '@/stores/config'
 import { usePlanStore } from '@/stores/plan'
-import { ref, computed, nextTick, watch, h, inject } from 'vue'
-import pinyinMatch from 'pinyin-match/es/traditional'
-import { NAvatar, NTag } from 'naive-ui'
+import { ref, computed, nextTick, watch, inject } from 'vue'
 const config_store = useConfigStore()
 const plan_store = usePlanStore()
 const { operators, groups, current_plan: plan } = storeToRefs(plan_store)
@@ -127,73 +125,6 @@ function drop_facility(target, event) {
   plan.value[target] = source_plan
   event.preventDefault()
 }
-const renderMultipleSelectTag = ({ option, handleClose }) => {
-  return h(
-    NTag,
-    {
-      style: {
-        padding: '0 6px 0 4px'
-      },
-      round: true,
-      closable: true,
-      onClose: (e) => {
-        e.stopPropagation()
-        handleClose()
-      }
-    },
-    {
-      default: () =>
-        h(
-          'div',
-          {
-            style: {
-              display: 'flex',
-              alignItems: 'center'
-            }
-          },
-          [
-            h(NAvatar, {
-              src: 'avatar/' + option.value + '.png',
-              round: true,
-              size: 22,
-              style: {
-                marginRight: '4px'
-              }
-            }),
-            option.label
-          ]
-        )
-    }
-  )
-}
-const renderLabel = (option) => {
-  return h(
-    'div',
-    {
-      style: {
-        display: 'flex',
-        alignItems: 'center'
-      }
-    },
-    [
-      h(NAvatar, {
-        src: 'avatar/' + option.value + '.png',
-        round: true,
-        size: 'small'
-      }),
-      h(
-        'div',
-        {
-          style: {
-            marginLeft: '12px',
-            padding: '4px 0'
-          }
-        },
-        [h('div', null, [option.label])]
-      )
-    ]
-  )
-}
 
 const avatar_bg = computed(() => {
   return theme.value == 'light' ? 'lightgrey' : 'grey'
@@ -202,6 +133,9 @@ const avatar_bg = computed(() => {
 defineExpose({
   outer
 })
+
+import { render_op_label, render_op_tag } from '@/utils/op_select'
+import { match } from 'pinyin-pro'
 </script>
 
 <template>
@@ -444,8 +378,8 @@ defineExpose({
               :options="operators_with_free"
               class="operator-select"
               v-model:value="plan[facility].plans[i - 1].agent"
-              :filter="(p, o) => pinyinMatch.match(o.label, p)"
-              :render-label="renderLabel"
+              :filter="(p, o) => match(o.label, p, { precision: 'any' })"
+              :render-label="render_op_label"
             />
           </td>
           <td class="select-label">
@@ -454,7 +388,7 @@ defineExpose({
             >
           </td>
           <td class="table-space group">
-            <n-input v-model:value="plan[facility].plans[i - 1].group"></n-input>
+            <n-input v-model:value="plan[facility].plans[i - 1].group" />
           </td>
           <td class="select-label">替换：</td>
           <td>
@@ -465,9 +399,9 @@ defineExpose({
               :options="operators_with_free"
               class="replacement-select"
               v-model:value="plan[facility].plans[i - 1].replacement"
-              :filter="(p, o) => pinyinMatch.match(o.label, p)"
-              :render-label="renderLabel"
-              :render-tag="renderMultipleSelectTag"
+              :filter="(p, o) => match(o.label, p, { precision: 'any' })"
+              :render-label="render_op_label"
+              :render-tag="render_op_tag"
             />
           </td>
         </tr>
@@ -660,5 +594,11 @@ defineExpose({
   flex-direction: column;
   align-items: center;
   justify-content: center;
+}
+</style>
+
+<style>
+.n-base-selection-placeholder .n-avatar {
+  display: none;
 }
 </style>

@@ -1,6 +1,7 @@
 import { defineStore } from 'pinia'
-import { ref, watch } from 'vue'
+import { ref, watchEffect, inject } from 'vue'
 import axios from 'axios'
+import { useDebounceFn } from '@vueuse/core'
 
 export const useConfigStore = defineStore('config', () => {
   const adb = ref('')
@@ -139,6 +140,7 @@ export const useConfigStore = defineStore('config', () => {
   }
 
   function build_config() {
+    console.log('build_config')
     return {
       account: account.value,
       adb: adb.value,
@@ -204,69 +206,18 @@ export const useConfigStore = defineStore('config', () => {
     }
   }
 
-  watch(
-    [
-      adb,
-      drone_count_limit,
-      drone_room,
-      drone_interval,
-      enable_party,
-      free_blacklist,
-      maa_adb_path,
-      maa_enable,
-      maa_path,
-      maa_expiring_medicine,
-      maa_weekly_plan,
-      maa_weekly_plan1,
-      maa_rg_enable,
-      maa_long_task_type,
-      mail_enable,
-      account,
-      pass_code,
-      package_type,
-      reload_room,
-      run_mode,
-      run_order_delay,
-      start_automatically,
-      maa_mall_buy,
-      maa_mall_blacklist,
-      maa_gap,
-      simulator,
-      resting_threshold,
-      theme,
-      tap_to_launch_game,
-      exit_game_when_idle,
-      close_simulator_when_idle,
-      maa_conn_preset,
-      maa_touch_option,
-      maa_mall_ignore_blacklist_when_full,
-      maa_rg_sleep_min,
-      maa_rg_sleep_max,
-      maa_credit_fight,
-      maa_depot_enable,
-      maa_rg_theme,
-      rogue,
-      sss,
-      screenshot,
-      mail_subject,
-      recruit_enable,
-      recruitment_time,
-      recruitment_permit,
-      recruit_robot,
-      skland_enable,
-      skland_info,
-      run_order_grandet_mode,
-      server_push_enable,
-      sendKey,
-      check_mail_enable,
-      report_enable,
-      recruit_gap
-    ],
-    () => {
-      axios.post(`${import.meta.env.VITE_HTTP_URL}/conf`, build_config())
-    },
-    { deep: true }
-  )
+  const loaded = inject('loaded')
+
+  const debounce_post = useDebounceFn((new_config) => {
+    axios.post(`${import.meta.env.VITE_HTTP_URL}/conf`, new_config)
+  }, 1000)
+
+  watchEffect(() => {
+    if (loaded.value) {
+      const new_config = build_config()
+      debounce_post(new_config)
+    }
+  })
 
   return {
     adb,

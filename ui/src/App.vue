@@ -107,17 +107,15 @@ import { storeToRefs } from 'pinia'
 
 const showModal = ref(false)
 import { NIcon } from 'naive-ui'
-import {
-  BookOutline,
-  Home,
-  BarChart,
-  PieChart,
-  StatsChart,
-  Settings,
-  HelpCircle,
-  Storefront,
-  ReaderOutline
-} from '@vicons/ionicons5'
+import Home from '@vicons/ionicons5/Home'
+import BookOutline from '@vicons/ionicons5/BookOutline'
+import BarChart from '@vicons/ionicons5/BarChart'
+import PieChart from '@vicons/ionicons5/PieChart'
+import StatsChart from '@vicons/ionicons5/StatsChart'
+import Settings from '@vicons/ionicons5/Settings'
+import HelpCircle from '@vicons/ionicons5/HelpCircle'
+import Storefront from '@vicons/ionicons5/Storefront'
+import ReaderOutline from '@vicons/ionicons5/ReaderOutline'
 
 function renderIcon(icon) {
   return () => h(NIcon, null, { default: () => h(icon) })
@@ -213,10 +211,10 @@ function actions_on_resize() {
   mobile.value = window.innerWidth < 800
 }
 
-const loaded = ref(false)
-
 const mobile = ref(true)
 provide('mobile', mobile)
+
+const loaded = inject('loaded')
 
 onMounted(async () => {
   actions_on_resize()

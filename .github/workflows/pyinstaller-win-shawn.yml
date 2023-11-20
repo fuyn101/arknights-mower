@@ -11,12 +11,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - name: download source
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           path: main
 
       - name: download updater
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           repository: ArkMowers/updater
           path: updater
@@ -25,8 +25,8 @@ jobs:
         uses: actions/setup-node@v3
         with:
           node-version: 16
-          cache: 'npm'
-          cache-dependency-path: '**/package-lock.json'
+          cache: "npm"
+          cache-dependency-path: "**/package-lock.json"
 
       - name: Install UPX
         uses: crazy-max/ghaction-upx@v2
@@ -63,21 +63,48 @@ jobs:
         run: |
           sed -i "s/__version__ = '\(.*\)'/__version__ = '\1+${GITHUB_SHA::7}'/g" ./arknights_mower/__init__.py
 
+      - name: download docs
+        uses: actions/checkout@v4
+        with:
+          path: docs
+          ref: doc-pages
+
+      - name: setup ruby
+        uses: ruby/setup-ruby@v1
+        env:
+          BUNDLE_GEMFILE: ${{ github.workspace }}/docs/Gemfile
+        with:
+          ruby-version: "2.7.8"
+          bundler-cache: true
+
+      - name: build docs
+        working-directory: ./docs
+        shell: cmd
+        run: |
+          bundle exec jekyll build -b /docs
+
       - name: Make package
         working-directory: ./main
         shell: cmd
         run: |
           set PYTHONHASHSEED=114514
           set SOURCE_DATE_EPOCH=1694076231
-          venv\Scripts\pyinstaller .\webui_zip.spec
+          venv\Scripts\pyinstaller .\webui_zip.spec --distpath=mower
+          move ..\docs\_site mower\mower\_internal\dist\docs
 
       - name: calculate hash
-        working-directory: ./main/dist/mower
+        working-directory: ./main/mower/mower
         shell: cmd
         run: |
           ..\..\venv\Scripts\python.exe ..\..\..\updater\publish.py
 
+      - name: create zip
+        working-directory: ./main/mower
+        shell: bash
+        run: |
+          zip -r mower.zip mower
+
       - uses: actions/upload-artifact@v3
         with:
           name: mower
-          path: main/dist/mower
+          path: main/mower/mower.zip
