@@ -76,7 +76,6 @@ export const useConfigStore = defineStore('config', () => {
   const sign_in = ref({ enable: true })
   const get_scene = ref({})
   const droidcast = ref({})
-  const visit_friend = ref(true)
 
   async function load_shop() {
     const response = await axios.get(`${import.meta.env.VITE_HTTP_URL}/shop`)
@@ -169,7 +168,6 @@ export const useConfigStore = defineStore('config', () => {
     sign_in.value = response.data.sign_in
     get_scene.value = response.data.get_scene
     droidcast.value = response.data.droidcast
-    visit_friend.value = response.data.visit_friend
   }
 
   function build_config() {
@@ -252,8 +250,7 @@ export const useConfigStore = defineStore('config', () => {
       feature_matcher: feature_matcher.value,
       sign_in: sign_in.value,
       get_scene: get_scene.value,
-      droidcast: droidcast.value,
-      visit_friend: visit_friend.value
+      droidcast: droidcast.value
     }
   }
 
@@ -340,7 +337,6 @@ export const useConfigStore = defineStore('config', () => {
     feature_matcher,
     sign_in,
     get_scene,
-    droidcast,
-    visit_friend
+    droidcast
   }
 })
